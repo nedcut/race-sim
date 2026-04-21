@@ -29,7 +29,13 @@ reward:
   progress: 1.0
   lateral_error: 0.05
   heading_error: 0.02
-  off_track: 25.0
+  boundary_margin: 0.2
+  boundary_margin_start: 1.25
+  speed_excess: 0.08
+  target_speed_max: 9.5
+  target_speed_min: 3.0
+  target_speed_curvature_gain: 5.0
+  off_track: 35.0
 reset_randomization:
   enabled: false
   progress: true
@@ -37,3 +43,5 @@ reset_randomization:
   heading_error: 0.25
   speed_min: 1.0
   speed_max: 4.0
+  grip_min: 0.9
+  grip_max: 1.1

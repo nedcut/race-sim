@@ -41,6 +41,10 @@ class RewardConfig:
     heading_error: float = 0.02
     boundary_margin: float = 0.0
     boundary_margin_start: float = 1.0
+    speed_excess: float = 0.0
+    target_speed_max: float = 9.5
+    target_speed_min: float = 3.0
+    target_speed_curvature_gain: float = 5.0
     off_track: float = 25.0
 
 
@@ -114,7 +118,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             high=np.array([1.0, 1.0, 1.0], dtype=np.float32),
             dtype=np.float32,
         )
-        observation_size = 10 + 2 * len(self.observation_config.lookahead_distances)
+        observation_size = 11 + 2 * len(self.observation_config.lookahead_distances)
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -259,12 +263,16 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         lap_complete = self._lap_complete()
         boundary_margin = self.track.half_width - abs(projection.lateral_error)
         boundary_shortfall = max(self.reward_config.boundary_margin_start - boundary_margin, 0.0)
+        speed = float(np.linalg.norm(self._linear_velocity()[:2]))
+        target_speed = self._target_speed(projection.progress)
+        speed_excess = max(speed - target_speed, 0.0)
         reward_terms = {
             "progress": self.reward_config.progress * progress_delta,
             "lateral_error": -self.reward_config.lateral_error * abs(projection.lateral_error),
             "heading_error": -self.reward_config.heading_error
             * abs(projection.heading_error or 0.0),
             "boundary_margin": -self.reward_config.boundary_margin * boundary_shortfall**2,
+            "speed_excess": -self.reward_config.speed_excess * speed_excess**2,
             "off_track": -self.reward_config.off_track if off_track else 0.0,
         }
         reward = float(sum(reward_terms.values()))
@@ -384,6 +392,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             float(abs(projection.lateral_error) > self.track.half_width),
         ]
         features.extend(self._boundary_margin_features(projection.lateral_error))
+        features.append(self._target_speed(projection.progress) / self.reward_config.target_speed_max)
         features.extend(self._lookahead_features(projection.progress, yaw))
         return np.asarray(features, dtype=np.float32)
 
@@ -410,6 +419,32 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             features.extend([heading_to_future, signed_curvature])
         return features
 
+    def _target_speed(self, progress: float) -> float:
+        curvatures = self._upcoming_curvatures(progress)
+        max_curvature = max((abs(curvature) for curvature in curvatures), default=0.0)
+        target_speed = self.reward_config.target_speed_max / (
+            1.0 + self.reward_config.target_speed_curvature_gain * max_curvature
+        )
+        return float(
+            np.clip(
+                target_speed,
+                self.reward_config.target_speed_min,
+                self.reward_config.target_speed_max,
+            )
+        )
+
+    def _upcoming_curvatures(self, progress: float) -> list[float]:
+        _point, tangent, _normal = self.track.sample_at(progress)
+        current_heading = float(np.arctan2(tangent[1], tangent[0]))
+        curvatures: list[float] = []
+        for distance in self.observation_config.lookahead_distances:
+            _future_point, future_tangent, _future_normal = self.track.sample_at(
+                progress + distance
+            )
+            future_heading = float(np.arctan2(future_tangent[1], future_tangent[0]))
+            curvatures.append(wrap_angle(future_heading - current_heading) / max(distance, 1e-6))
+        return curvatures
+
     def _info(self, projection: Any, reward_terms: dict[str, float]) -> dict[str, Any]:
         pose = self._pose()
         velocity = self._linear_velocity()
@@ -432,6 +467,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             "smoothed_action": self.smoothed_action.copy(),
             "lateral_error": projection.lateral_error,
             "heading_error": projection.heading_error,
+            "target_speed": self._target_speed(projection.progress),
             "grip_scale": self.grip_scale,
             "off_track": abs(projection.lateral_error) > self.track.half_width,
             "lap_complete": self._lap_complete(),
