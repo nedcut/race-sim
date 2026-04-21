@@ -62,6 +62,9 @@ class TrackCurriculumEnv(gym.Env[np.ndarray, np.ndarray]):
         observation, reward, terminated, truncated, info = self.current_env.step(action)
         return observation, reward, terminated, truncated, self._annotate_info(info)
 
+    def set_probabilities(self, probabilities: list[float]) -> None:
+        self.probabilities = normalize_probabilities(probabilities, len(self.envs))
+
     def _annotate_info(self, info: dict[str, Any]) -> dict[str, Any]:
         annotated = dict(info)
         annotated["track_index"] = self.current_index

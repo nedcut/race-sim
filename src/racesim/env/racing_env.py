@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -37,15 +38,26 @@ class ControlConfig:
 @dataclass(frozen=True)
 class RewardConfig:
     progress: float = 1.0
+    time: float = 0.0
     lateral_error: float = 0.05
     heading_error: float = 0.02
     boundary_margin: float = 0.0
     boundary_margin_start: float = 1.0
+    progress_gate: float = 0.0
+    progress_gate_spacing: float = 0.1
     speed_excess: float = 0.0
     target_speed_max: float = 9.5
     target_speed_min: float = 3.0
     target_speed_curvature_gain: float = 5.0
+    no_progress: float = 0.0
     off_track: float = 25.0
+
+
+@dataclass(frozen=True)
+class TerminationConfig:
+    off_track_margin: float = 0.0
+    no_progress_window_steps: int = 0
+    no_progress_min_delta: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -105,13 +117,12 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
 
         self.control = ControlConfig(**self.config.get("control", {}))
         self.reward_config = RewardConfig(**self.config.get("reward", {}))
+        self.termination_config = TerminationConfig(**self.config.get("termination", {}))
         self.observation_config = ObservationConfig(**self.config.get("observation", {}))
         self.reset_randomization = ResetRandomizationConfig(
             **self.config.get("reset_randomization", {})
         )
-        self.off_track_margin = float(
-            self.config.get("termination", {}).get("off_track_margin", 0.0)
-        )
+        self.off_track_margin = self.termination_config.off_track_margin
 
         self.action_space = spaces.Box(
             low=np.array([-1.0, 0.0, 0.0], dtype=np.float32),
@@ -131,6 +142,8 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.cumulative_forward_progress = 0.0
         self.smoothed_action = np.zeros(3, dtype=float)
         self.grip_scale = 1.0
+        self.next_progress_gate = 0.0
+        self.progress_history: deque[tuple[int, float]] = deque()
 
     @staticmethod
     def _load_config(path: Path) -> dict[str, Any]:
@@ -179,6 +192,9 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.cumulative_forward_progress = 0.0
         self.smoothed_action[:] = 0.0
         self.step_count = 0
+        self.next_progress_gate = self._progress_gate_distance()
+        self.progress_history.clear()
+        self.progress_history.append((0, self.cumulative_forward_progress))
 
         observation = self._observation(projection)
         return observation, self._info(projection, reward_terms={})
@@ -258,9 +274,11 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         progress_delta = self.track.progress_delta(previous_progress, projection.progress)
         self.previous_progress = projection.progress
         self.cumulative_forward_progress += max(progress_delta, 0.0)
+        gates_crossed = self._consume_progress_gates()
 
         off_track = self.track.is_off_track(pose[:2], margin=self.off_track_margin)
         lap_complete = self._lap_complete()
+        no_progress_timeout = self._no_progress_timeout()
         boundary_margin = self.track.half_width - abs(projection.lateral_error)
         boundary_shortfall = max(self.reward_config.boundary_margin_start - boundary_margin, 0.0)
         speed = float(np.linalg.norm(self._linear_velocity()[:2]))
@@ -268,17 +286,20 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         speed_excess = max(speed - target_speed, 0.0)
         reward_terms = {
             "progress": self.reward_config.progress * progress_delta,
+            "time": -self.reward_config.time,
             "lateral_error": -self.reward_config.lateral_error * abs(projection.lateral_error),
             "heading_error": -self.reward_config.heading_error
             * abs(projection.heading_error or 0.0),
             "boundary_margin": -self.reward_config.boundary_margin * boundary_shortfall**2,
+            "progress_gate": self.reward_config.progress_gate * gates_crossed,
             "speed_excess": -self.reward_config.speed_excess * speed_excess**2,
+            "no_progress": -self.reward_config.no_progress if no_progress_timeout else 0.0,
             "off_track": -self.reward_config.off_track if off_track else 0.0,
         }
         reward = float(sum(reward_terms.values()))
 
         terminated = off_track or lap_complete
-        truncated = self.step_count >= self.max_episode_steps
+        truncated = self.step_count >= self.max_episode_steps or no_progress_timeout
         observation = self._observation(projection)
         return observation, reward, terminated, truncated, self._info(projection, reward_terms)
 
@@ -445,6 +466,40 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             curvatures.append(wrap_angle(future_heading - current_heading) / max(distance, 1e-6))
         return curvatures
 
+    def _progress_gate_distance(self) -> float:
+        spacing = self.reward_config.progress_gate_spacing
+        if spacing <= 0.0:
+            return float("inf")
+        if spacing <= 1.0:
+            return spacing * self.track.length
+        return spacing
+
+    def _consume_progress_gates(self) -> int:
+        if self.reward_config.progress_gate <= 0.0 or not np.isfinite(self.next_progress_gate):
+            return 0
+        spacing = self._progress_gate_distance()
+        gates_crossed = 0
+        while self.cumulative_forward_progress >= self.next_progress_gate:
+            gates_crossed += 1
+            self.next_progress_gate += spacing
+        return gates_crossed
+
+    def _no_progress_timeout(self) -> bool:
+        window = self.termination_config.no_progress_window_steps
+        min_delta = self.termination_config.no_progress_min_delta
+        if window <= 0 or min_delta <= 0.0:
+            return False
+
+        self.progress_history.append((self.step_count, self.cumulative_forward_progress))
+        cutoff = self.step_count - window
+        while len(self.progress_history) > 1 and self.progress_history[1][0] <= cutoff:
+            self.progress_history.popleft()
+
+        oldest_step, oldest_progress = self.progress_history[0]
+        if self.step_count - oldest_step < window:
+            return False
+        return self.cumulative_forward_progress - oldest_progress < min_delta
+
     def _info(self, projection: Any, reward_terms: dict[str, float]) -> dict[str, Any]:
         pose = self._pose()
         velocity = self._linear_velocity()
@@ -471,8 +526,20 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             "grip_scale": self.grip_scale,
             "off_track": abs(projection.lateral_error) > self.track.half_width,
             "lap_complete": self._lap_complete(),
+            "no_progress_timeout": self._no_progress_timeout_info(),
             "reward_terms": reward_terms,
         }
+
+    def _no_progress_timeout_info(self) -> bool:
+        window = self.termination_config.no_progress_window_steps
+        min_delta = self.termination_config.no_progress_min_delta
+        if window <= 0 or min_delta <= 0.0 or not self.progress_history:
+            return False
+        oldest_step, oldest_progress = self.progress_history[0]
+        return (
+            self.step_count - oldest_step >= window
+            and self.cumulative_forward_progress - oldest_progress < min_delta
+        )
 
     def _pose(self) -> np.ndarray:
         qpos = self.data.qpos[self.root_qpos_adr : self.root_qpos_adr + 7]

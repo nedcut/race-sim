@@ -1,0 +1,53 @@
+seed: 4
+total_timesteps: 1000000
+output_dir: results/ppo_staged_progress_1m
+env:
+  env_configs:
+    - configs/env.yaml
+    - configs/env_s_curve.yaml
+    - configs/env_sweepers.yaml
+    - configs/env_stop_go.yaml
+    - configs/env_hairpin.yaml
+  probabilities:
+    - 0.3
+    - 0.25
+    - 0.25
+    - 0.1
+    - 0.1
+  randomize_reset: true
+  lap_target: 1.0
+  max_episode_steps: 2200
+curriculum:
+  stages:
+    - at_timesteps: 250000
+      probabilities:
+        - 0.18
+        - 0.22
+        - 0.18
+        - 0.25
+        - 0.17
+    - at_timesteps: 600000
+      probabilities:
+        - 0.1
+        - 0.15
+        - 0.12
+        - 0.38
+        - 0.25
+ppo:
+  policy: MlpPolicy
+  n_steps: 2048
+  batch_size: 256
+  learning_rate: 0.00025
+  gamma: 0.99
+  gae_lambda: 0.95
+  ent_coef: 0.01
+  clip_range: 0.2
+eval:
+  env_config: configs/env_stop_go.yaml
+  frequency: 25000
+  episodes: 3
+  max_steps: 2200
+  deterministic: true
+live:
+  enabled: true
+  directory: results/ppo_staged_progress_1m/live

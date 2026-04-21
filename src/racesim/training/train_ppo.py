@@ -10,6 +10,11 @@ import yaml
 from racesim.training.curriculum_env import TrackCurriculumEnv
 from racesim.training.live_eval import LiveEvalCallback
 
+try:
+    from stable_baselines3.common.callbacks import BaseCallback
+except ImportError:  # pragma: no cover - dry-run config tests do not need SB3 installed.
+    BaseCallback = object  # type: ignore[misc,assignment]
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train PPO on the racing environment.")
@@ -60,6 +65,9 @@ def main() -> None:
     )
 
     callbacks = []
+    stage_config = config.get("curriculum", {}).get("stages", [])
+    if stage_config:
+        callbacks.append(CurriculumStageCallback(stage_config))
     eval_config = config.get("eval", {})
     live_config = config.get("live", {})
     if eval_config:
@@ -100,6 +108,31 @@ def make_training_env(config: dict[str, Any]) -> TrackCurriculumEnv:
         max_episode_steps=env_config.get("max_episode_steps"),
         probabilities=env_config.get("probabilities"),
     )
+
+
+class CurriculumStageCallback(BaseCallback):
+    """Update track sampling probabilities at configured training steps."""
+
+    def __init__(self, stages: list[dict[str, Any]]) -> None:
+        super().__init__()
+        self.stages = sorted(stages, key=lambda stage: int(stage["at_timesteps"]))
+        self.next_stage = 0
+
+    def _on_step(self) -> bool:
+        while (
+            self.next_stage < len(self.stages)
+            and self.num_timesteps >= int(self.stages[self.next_stage]["at_timesteps"])
+        ):
+            stage = self.stages[self.next_stage]
+            probabilities = [float(value) for value in stage["probabilities"]]
+            self.training_env.env_method("set_probabilities", probabilities)
+            print(
+                "Curriculum stage "
+                f"{self.next_stage + 1}/{len(self.stages)} at {self.num_timesteps}: "
+                f"probabilities={probabilities}"
+            )
+            self.next_stage += 1
+        return True
 
 
 if __name__ == "__main__":

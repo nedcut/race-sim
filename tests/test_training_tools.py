@@ -25,6 +25,15 @@ def test_train_config_builds_curriculum_env() -> None:
     assert info["track_name"] == "oval"
 
 
+def test_staged_progress_config_builds_curriculum_env() -> None:
+    config = load_train_config(Path("configs/train_ppo_staged_progress_1m.yaml"))
+    env = make_training_env(config)
+
+    assert len(config["curriculum"]["stages"]) == 2
+    assert len(env.envs) == 5
+    np.testing.assert_allclose(env.probabilities.sum(), 1.0)
+
+
 def test_evaluate_policy_model_with_dummy_policy() -> None:
     result = evaluate_policy_model(
         model=DummyPolicy(),

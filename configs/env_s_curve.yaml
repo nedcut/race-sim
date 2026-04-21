@@ -25,16 +25,22 @@ control:
   center_of_mass_to_rear: 0.67
 termination:
   off_track_margin: 0.5
+  no_progress_window_steps: 250
+  no_progress_min_delta: 15.0
 reward:
   progress: 1.0
+  time: 0.004
   lateral_error: 0.05
   heading_error: 0.02
   boundary_margin: 0.2
   boundary_margin_start: 1.25
-  speed_excess: 0.08
+  progress_gate: 6.0
+  progress_gate_spacing: 0.1
+  speed_excess: 0.035
   target_speed_max: 9.5
-  target_speed_min: 3.0
-  target_speed_curvature_gain: 5.0
+  target_speed_min: 3.5
+  target_speed_curvature_gain: 3.5
+  no_progress: 20.0
   off_track: 35.0
 reset_randomization:
   enabled: false
