@@ -13,7 +13,9 @@ def test_env_reset_returns_valid_observation() -> None:
     assert observation.shape == env.observation_space.shape
     assert env.observation_space.contains(observation)
     assert info["lap_fraction"] == 0.0
+    assert info["cumulative_lap_fraction"] == 0.0
     assert not info["off_track"]
+    assert not info["lap_complete"]
 
 
 def test_env_step_advances_progress_with_throttle() -> None:

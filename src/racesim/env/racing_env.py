@@ -87,6 +87,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
 
         self.step_count = 0
         self.previous_progress = 0.0
+        self.cumulative_forward_progress = 0.0
 
     @staticmethod
     def _load_config(path: Path) -> dict[str, Any]:
@@ -126,6 +127,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
 
         projection = self.track.project(point, heading=heading)
         self.previous_progress = projection.progress
+        self.cumulative_forward_progress = 0.0
         self.step_count = 0
 
         observation = self._observation(projection)
@@ -149,8 +151,10 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         projection = self.track.project(pose[:2], heading=pose[2])
         progress_delta = self.track.progress_delta(previous_progress, projection.progress)
         self.previous_progress = projection.progress
+        self.cumulative_forward_progress += max(progress_delta, 0.0)
 
         off_track = self.track.is_off_track(pose[:2], margin=self.off_track_margin)
+        lap_complete = self.cumulative_forward_progress >= self.track.length
         reward_terms = {
             "progress": self.reward_config.progress * progress_delta,
             "lateral_error": -self.reward_config.lateral_error * abs(projection.lateral_error),
@@ -160,7 +164,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         }
         reward = float(sum(reward_terms.values()))
 
-        terminated = off_track
+        terminated = off_track or lap_complete
         truncated = self.step_count >= self.max_episode_steps
         observation = self._observation(projection)
         return observation, reward, terminated, truncated, self._info(projection, reward_terms)
@@ -219,9 +223,11 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         return {
             "progress": projection.progress,
             "lap_fraction": projection.progress / self.track.length,
+            "cumulative_lap_fraction": self.cumulative_forward_progress / self.track.length,
             "lateral_error": projection.lateral_error,
             "heading_error": projection.heading_error,
             "off_track": abs(projection.lateral_error) > self.track.half_width,
+            "lap_complete": self.cumulative_forward_progress >= self.track.length,
             "reward_terms": reward_terms,
         }
 

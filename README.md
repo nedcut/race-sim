@@ -9,6 +9,8 @@ This repository studies continuous control for autonomous racing in a simplified
 - Oval and technical track configs
 - Unit tests for progress, lateral error, heading error, and off-track checks
 - Track plotting script
+- Minimal MuJoCo/Gymnasium environment with continuous steering/throttle/brake actions
+- Heuristic baseline controller that completes the oval track
 
 ## Quick Start
 
@@ -18,6 +20,8 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
 racesim-plot-track --config configs/tracks/oval.yaml --output results/oval_track.png
+racesim-smoke-mujoco
+racesim-rollout --controller heuristic --steps 1800
 ```
 
 ## Near-Term Build Order
