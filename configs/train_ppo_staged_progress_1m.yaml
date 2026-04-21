@@ -1,6 +1,6 @@
 seed: 4
 total_timesteps: 1000000
-output_dir: results/ppo_staged_progress_1m
+output_dir: results/ppo_staged_progress_capped_1m
 env:
   env_configs:
     - configs/env.yaml
@@ -50,4 +50,4 @@ eval:
   deterministic: true
 live:
   enabled: true
-  directory: results/ppo_staged_progress_1m/live
+  directory: results/ppo_staged_progress_capped_1m/live
