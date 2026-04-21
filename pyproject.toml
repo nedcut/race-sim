@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "gymnasium>=0.29",
+  "imageio>=2.34",
   "matplotlib>=3.8",
   "mujoco>=3.2",
   "numpy>=1.26",
@@ -31,6 +32,8 @@ racesim-plot-track = "racesim.scripts.plot_track:main"
 racesim-smoke-mujoco = "racesim.scripts.smoke_mujoco:main"
 racesim-rollout = "racesim.scripts.rollout_env:main"
 racesim-evaluate = "racesim.eval.evaluate:main"
+racesim-keyboard-drive = "racesim.scripts.keyboard_drive:main"
+racesim-render-rollout = "racesim.scripts.render_rollout:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/racesim"]

@@ -23,7 +23,13 @@ racesim-plot-track --config configs/tracks/oval.yaml --output results/oval_track
 racesim-smoke-mujoco
 racesim-rollout --controller heuristic --steps 1800
 racesim-evaluate --controller heuristic --episodes 5 --output results/eval_heuristic.json
+racesim-render-rollout --controller heuristic --steps 1800
+racesim-keyboard-drive
 ```
+
+## Inspecting The Simulator
+
+The current car is a simplified direct-force/yaw MuJoCo body, not yet a tire/contact model. See [docs/simulation.md](docs/simulation.md) for what is worth trusting now, what is intentionally simplified, and how to manually drive or render rollouts.
 
 ## Near-Term Build Order
 

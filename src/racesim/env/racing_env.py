@@ -220,10 +220,24 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         )
 
     def _info(self, projection: Any, reward_terms: dict[str, float]) -> dict[str, Any]:
+        pose = self._pose()
+        velocity = self._linear_velocity()
+        yaw = pose[2]
+        forward = np.array([np.cos(yaw), np.sin(yaw), 0.0])
+        lateral = np.array([-np.sin(yaw), np.cos(yaw), 0.0])
+        longitudinal_speed = float(np.dot(velocity, forward))
+        lateral_speed = float(np.dot(velocity, lateral))
+
         return {
             "progress": projection.progress,
             "lap_fraction": projection.progress / self.track.length,
             "cumulative_lap_fraction": self.cumulative_forward_progress / self.track.length,
+            "position": pose[:2].copy(),
+            "heading": float(pose[2]),
+            "speed": float(np.linalg.norm(velocity[:2])),
+            "longitudinal_speed": longitudinal_speed,
+            "lateral_speed": lateral_speed,
+            "yaw_rate": self._yaw_rate(),
             "lateral_error": projection.lateral_error,
             "heading_error": projection.heading_error,
             "off_track": abs(projection.lateral_error) > self.track.half_width,
