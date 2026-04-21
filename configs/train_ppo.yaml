@@ -1,0 +1,9 @@
+env_config: configs/env.yaml
+seed: 0
+total_timesteps: 250000
+ppo:
+  n_steps: 2048
+  batch_size: 256
+  learning_rate: 0.0003
+  gamma: 0.99
+  gae_lambda: 0.95

@@ -1,0 +1,11 @@
+env_config: configs/env.yaml
+controllers:
+  - heuristic
+  - ppo
+episodes: 20
+seeds: [0, 1, 2, 3, 4]
+metrics:
+  - completion_rate
+  - lap_time
+  - off_track_events
+  - mean_abs_lateral_error

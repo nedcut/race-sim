@@ -1,0 +1,8 @@
+name: oval
+kind: rounded_rectangle
+length: 80.0
+height: 36.0
+radius: 14.0
+width: 10.0
+samples_per_corner: 32
+samples_per_straight: 28

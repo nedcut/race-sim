@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "racesim"
+version = "0.1.0"
+description = "Simplified MuJoCo racing environment for control and robustness experiments."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "gymnasium>=0.29",
+  "matplotlib>=3.8",
+  "mujoco>=3.2",
+  "numpy>=1.26",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+]
+rl = [
+  "stable-baselines3>=2.3",
+  "torch>=2.2",
+]
+
+[project.scripts]
+racesim-plot-track = "racesim.scripts.plot_track:main"
+racesim-smoke-mujoco = "racesim.scripts.smoke_mujoco:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/racesim"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
