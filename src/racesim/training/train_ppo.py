@@ -41,6 +41,7 @@ def main() -> None:
         return
 
     from stable_baselines3 import PPO
+    from stable_baselines3.common.callbacks import CallbackList
     from stable_baselines3.common.monitor import Monitor
     from stable_baselines3.common.vec_env import DummyVecEnv
 
@@ -74,7 +75,8 @@ def main() -> None:
             )
         )
 
-    model.learn(total_timesteps=int(config["total_timesteps"]), callback=callbacks)
+    callback = CallbackList(callbacks) if callbacks else None
+    model.learn(total_timesteps=int(config["total_timesteps"]), callback=callback)
     final_path = output_dir / "final_model"
     model.save(final_path)
     print(f"Saved {final_path}.zip")

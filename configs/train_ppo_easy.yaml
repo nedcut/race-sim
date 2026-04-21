@@ -1,6 +1,6 @@
 seed: 1
 total_timesteps: 500000
-output_dir: results/ppo_easy
+output_dir: results/ppo_easy_lookahead
 env:
   env_configs:
     - configs/env.yaml

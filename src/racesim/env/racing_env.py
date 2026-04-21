@@ -39,7 +39,15 @@ class RewardConfig:
     progress: float = 1.0
     lateral_error: float = 0.05
     heading_error: float = 0.02
+    boundary_margin: float = 0.0
+    boundary_margin_start: float = 1.0
     off_track: float = 25.0
+
+
+@dataclass(frozen=True)
+class ObservationConfig:
+    lookahead_distances: tuple[float, ...] = (6.0, 12.0, 24.0, 40.0)
+    curvature_scale: float = 20.0
 
 
 @dataclass(frozen=True)
@@ -50,6 +58,8 @@ class ResetRandomizationConfig:
     heading_error: float = 0.0
     speed_min: float | None = None
     speed_max: float | None = None
+    grip_min: float | None = None
+    grip_max: float | None = None
 
 
 class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
@@ -91,6 +101,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
 
         self.control = ControlConfig(**self.config.get("control", {}))
         self.reward_config = RewardConfig(**self.config.get("reward", {}))
+        self.observation_config = ObservationConfig(**self.config.get("observation", {}))
         self.reset_randomization = ResetRandomizationConfig(
             **self.config.get("reset_randomization", {})
         )
@@ -103,10 +114,11 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             high=np.array([1.0, 1.0, 1.0], dtype=np.float32),
             dtype=np.float32,
         )
+        observation_size = 10 + 2 * len(self.observation_config.lookahead_distances)
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(8,),
+            shape=(observation_size,),
             dtype=np.float32,
         )
 
@@ -114,6 +126,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.previous_progress = 0.0
         self.cumulative_forward_progress = 0.0
         self.smoothed_action = np.zeros(3, dtype=float)
+        self.grip_scale = 1.0
 
     @staticmethod
     def _load_config(path: Path) -> dict[str, Any]:
@@ -143,6 +156,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         lateral_offset = self._reset_lateral_offset(options, randomize)
         heading += self._reset_heading_error(options, randomize)
         initial_speed = self._reset_initial_speed(options, randomize)
+        self.grip_scale = self._reset_grip_scale(options, randomize)
         point = point + lateral_offset * normal
         quat = yaw_to_quat(heading)
 
@@ -204,6 +218,22 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             )
         return self.initial_speed
 
+    def _reset_grip_scale(self, options: dict[str, Any], randomize: bool) -> float:
+        if "grip_scale" in options:
+            return float(options["grip_scale"])
+        if (
+            randomize
+            and self.reset_randomization.grip_min is not None
+            and self.reset_randomization.grip_max is not None
+        ):
+            return float(
+                self.np_random.uniform(
+                    self.reset_randomization.grip_min,
+                    self.reset_randomization.grip_max,
+                )
+            )
+        return 1.0
+
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         action = np.clip(
             np.asarray(action, dtype=float),
@@ -227,11 +257,14 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
 
         off_track = self.track.is_off_track(pose[:2], margin=self.off_track_margin)
         lap_complete = self._lap_complete()
+        boundary_margin = self.track.half_width - abs(projection.lateral_error)
+        boundary_shortfall = max(self.reward_config.boundary_margin_start - boundary_margin, 0.0)
         reward_terms = {
             "progress": self.reward_config.progress * progress_delta,
             "lateral_error": -self.reward_config.lateral_error * abs(projection.lateral_error),
             "heading_error": -self.reward_config.heading_error
             * abs(projection.heading_error or 0.0),
+            "boundary_margin": -self.reward_config.boundary_margin * boundary_shortfall**2,
             "off_track": -self.reward_config.off_track if off_track else 0.0,
         }
         reward = float(sum(reward_terms.values()))
@@ -274,15 +307,17 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         front_slip = np.arctan2(lateral_speed + lf * yaw_rate, abs(safe_speed)) - steer_angle
         rear_slip = np.arctan2(lateral_speed - lr * yaw_rate, abs(safe_speed))
 
+        front_lateral_limit = self.control.max_lateral_force * self.grip_scale
+        rear_lateral_limit = self.control.max_lateral_force * self.grip_scale
         front_lateral_force = np.clip(
-            -self.control.front_cornering_stiffness * front_slip,
-            -self.control.max_lateral_force,
-            self.control.max_lateral_force,
+            -self.control.front_cornering_stiffness * self.grip_scale * front_slip,
+            -front_lateral_limit,
+            front_lateral_limit,
         )
         rear_lateral_force = np.clip(
-            -self.control.rear_cornering_stiffness * rear_slip,
-            -self.control.max_lateral_force,
-            self.control.max_lateral_force,
+            -self.control.rear_cornering_stiffness * self.grip_scale * rear_slip,
+            -rear_lateral_limit,
+            rear_lateral_limit,
         )
 
         drive_force = throttle * self.control.max_drive_force
@@ -338,19 +373,42 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         yaw_rate = self._yaw_rate()
         speed = float(np.linalg.norm(velocity[:2]))
 
-        return np.array(
-            [
-                projection.progress / self.track.length,
-                projection.lateral_error / self.track.half_width,
-                (projection.heading_error or 0.0) / np.pi,
-                longitudinal_speed,
-                lateral_speed,
-                yaw_rate,
-                speed,
-                float(abs(projection.lateral_error) > self.track.half_width),
-            ],
-            dtype=np.float32,
-        )
+        features = [
+            projection.progress / self.track.length,
+            projection.lateral_error / self.track.half_width,
+            (projection.heading_error or 0.0) / np.pi,
+            longitudinal_speed,
+            lateral_speed,
+            yaw_rate,
+            speed,
+            float(abs(projection.lateral_error) > self.track.half_width),
+        ]
+        features.extend(self._boundary_margin_features(projection.lateral_error))
+        features.extend(self._lookahead_features(projection.progress, yaw))
+        return np.asarray(features, dtype=np.float32)
+
+    def _boundary_margin_features(self, lateral_error: float) -> list[float]:
+        left_margin = self.track.half_width - lateral_error
+        right_margin = self.track.half_width + lateral_error
+        return [left_margin / self.track.width, right_margin / self.track.width]
+
+    def _lookahead_features(self, progress: float, yaw: float) -> list[float]:
+        _point, tangent, _normal = self.track.sample_at(progress)
+        current_heading = float(np.arctan2(tangent[1], tangent[0]))
+        features: list[float] = []
+        for distance in self.observation_config.lookahead_distances:
+            _future_point, future_tangent, _future_normal = self.track.sample_at(
+                progress + distance
+            )
+            future_heading = float(np.arctan2(future_tangent[1], future_tangent[0]))
+            heading_to_future = wrap_angle(future_heading - yaw) / np.pi
+            signed_curvature = (
+                wrap_angle(future_heading - current_heading)
+                / max(distance, 1e-6)
+                * self.observation_config.curvature_scale
+            )
+            features.extend([heading_to_future, signed_curvature])
+        return features
 
     def _info(self, projection: Any, reward_terms: dict[str, float]) -> dict[str, Any]:
         pose = self._pose()
@@ -374,6 +432,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             "smoothed_action": self.smoothed_action.copy(),
             "lateral_error": projection.lateral_error,
             "heading_error": projection.heading_error,
+            "grip_scale": self.grip_scale,
             "off_track": abs(projection.lateral_error) > self.track.half_width,
             "lap_complete": self._lap_complete(),
             "reward_terms": reward_terms,
