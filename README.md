@@ -31,7 +31,7 @@ racesim-keyboard-drive
 
 The current car is a simplified direct-force/yaw MuJoCo body, not yet a tire/contact model. See [docs/simulation.md](docs/simulation.md) for what is worth trusting now, what is intentionally simplified, and how to manually drive or render rollouts.
 
-On macOS, the keyboard viewer uses MuJoCo's `mjpython`; `racesim-keyboard-drive` will relaunch itself with it when available. Driving uses `I/K`, `J/U`, and `F/G` instead of WASD because MuJoCo reserves WASD for built-in viewer shortcuts.
+On macOS, the keyboard viewer uses MuJoCo's `mjpython`; `racesim-keyboard-drive` will relaunch itself with it when available. Driving uses `I/K`, `J/U`, and `F/G` instead of WASD because MuJoCo reserves WASD for built-in viewer shortcuts. The default camera is a dynamic chase camera behind the car.
 
 ## Near-Term Build Order
 

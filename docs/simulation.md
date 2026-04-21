@@ -61,9 +61,10 @@ Keyboard controls are printed when the script starts. The driving keys avoid WAS
 - `T`: center steering
 - `Space`: zero steering/throttle/brake
 - `H`: toggle heuristic autopilot
-- `1`: follow camera
+- `1`: chase camera
 - `2`: top-down camera
 - `3`: reset free camera
+- `4`: fixed MuJoCo follow camera
 
 If the viewer looks wrong, run the smoke check first:
 

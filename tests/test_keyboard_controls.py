@@ -13,3 +13,4 @@ def test_keyboard_drive_help_mentions_camera_option() -> None:
     )
 
     assert "--camera" in completed.stdout
+    assert "chase" in completed.stdout

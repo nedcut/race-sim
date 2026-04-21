@@ -20,10 +20,24 @@ def test_apply_viewer_camera_selects_fixed_named_camera() -> None:
     viewer = Mock()
     viewer.cam = Mock()
 
-    apply_viewer_camera(viewer, env, "follow")
+    apply_viewer_camera(viewer, env, "fixed")
 
     assert viewer.cam.type == mujoco.mjtCamera.mjCAMERA_FIXED
     assert viewer.cam.fixedcamid >= 0
+
+
+def test_apply_viewer_camera_can_use_dynamic_chase_camera() -> None:
+    env = RacingEnv("configs/env.yaml")
+    env.reset(seed=0)
+    viewer = Mock()
+    viewer.cam = Mock()
+    viewer.cam.lookat = [0.0, 0.0, 0.0]
+
+    apply_viewer_camera(viewer, env, "chase")
+
+    assert viewer.cam.type == mujoco.mjtCamera.mjCAMERA_FREE
+    assert viewer.cam.distance == 8.0
+    assert viewer.cam.elevation == -18.0
 
 
 def test_apply_viewer_camera_can_reset_free_camera() -> None:

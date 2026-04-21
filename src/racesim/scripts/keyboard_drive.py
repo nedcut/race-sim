@@ -21,8 +21,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--camera",
-        choices=("follow", "topdown", "free"),
-        default="follow",
+        choices=("chase", "topdown", "free", "fixed"),
+        default="chase",
         help="Initial MuJoCo viewer camera.",
     )
     parser.add_argument(
@@ -73,16 +73,18 @@ def main() -> None:
         elif char == "q":
             state["quit"] = True
         elif char == "1":
-            state["camera"] = "follow"
+            state["camera"] = "chase"
         elif char == "2":
             state["camera"] = "topdown"
         elif char == "3":
             state["camera"] = "free"
+        elif char == "4":
+            state["camera"] = "fixed"
 
     print(
         "Keyboard drive controls: I/K throttle up/down, J/U brake up/down, "
         "F/G steer, T center, Space zero, H heuristic toggle, R reset, Q quit. "
-        "Camera: 1 follow, 2 topdown, 3 free."
+        "Camera: 1 chase, 2 topdown, 3 free, 4 fixed."
     )
 
     try:
@@ -137,6 +139,16 @@ def main() -> None:
 def apply_viewer_camera(viewer: object, env: RacingEnv, camera_name: str) -> None:
     import mujoco
 
+    if camera_name == "chase":
+        pose = env._pose()
+        yaw_degrees = np.degrees(pose[2])
+        viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+        viewer.cam.lookat[:] = [pose[0], pose[1], 0.8]
+        viewer.cam.distance = 8.0
+        viewer.cam.azimuth = yaw_degrees + 180.0
+        viewer.cam.elevation = -18.0
+        return
+
     if camera_name == "free":
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
         viewer.cam.lookat[:] = [0.0, 0.0, 0.0]
@@ -144,6 +156,9 @@ def apply_viewer_camera(viewer: object, env: RacingEnv, camera_name: str) -> Non
         viewer.cam.azimuth = 90.0
         viewer.cam.elevation = -89.0
         return
+
+    if camera_name == "fixed":
+        camera_name = "follow"
 
     camera_id = mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
     if camera_id < 0:
