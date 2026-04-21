@@ -22,6 +22,7 @@ pytest
 racesim-plot-track --config configs/tracks/oval.yaml --output results/oval_track.png
 racesim-smoke-mujoco
 racesim-rollout --controller heuristic --steps 1800
+racesim-evaluate --controller heuristic --episodes 5 --output results/eval_heuristic.json
 ```
 
 ## Near-Term Build Order

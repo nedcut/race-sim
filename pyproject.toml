@@ -30,6 +30,7 @@ rl = [
 racesim-plot-track = "racesim.scripts.plot_track:main"
 racesim-smoke-mujoco = "racesim.scripts.smoke_mujoco:main"
 racesim-rollout = "racesim.scripts.rollout_env:main"
+racesim-evaluate = "racesim.eval.evaluate:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/racesim"]
