@@ -38,6 +38,32 @@ racesim-make-track-visual --track configs/tracks/technical.yaml --output assets/
 racesim-keyboard-drive
 ```
 
+## PPO Training
+
+Start with the oval-only PPO config:
+
+```bash
+racesim-train-ppo --config configs/train_ppo_oval.yaml
+```
+
+Watch live eval rollouts in another terminal:
+
+```bash
+racesim-live-dashboard --watch results/ppo_oval/live/latest_rollout.json
+```
+
+Evaluate a trained policy:
+
+```bash
+racesim-evaluate-policy --model results/ppo_oval/final_model.zip --config configs/env.yaml --episodes 5 --deterministic --record-trajectory --output results/eval_ppo_oval.json
+```
+
+Available training configs:
+
+- `configs/train_ppo_oval.yaml`
+- `configs/train_ppo_easy.yaml`
+- `configs/train_ppo_curriculum.yaml`
+
 ## Analysis Outputs
 
 The rollout plotting command produces:

@@ -1,0 +1,29 @@
+seed: 1
+total_timesteps: 500000
+output_dir: results/ppo_easy
+env:
+  env_configs:
+    - configs/env.yaml
+    - configs/env_s_curve.yaml
+    - configs/env_stop_go.yaml
+  randomize_reset: true
+  lap_target: 1.0
+  max_episode_steps: 1800
+ppo:
+  policy: MlpPolicy
+  n_steps: 1024
+  batch_size: 256
+  learning_rate: 0.0003
+  gamma: 0.99
+  gae_lambda: 0.95
+  ent_coef: 0.01
+  clip_range: 0.2
+eval:
+  env_config: configs/env.yaml
+  frequency: 15000
+  episodes: 3
+  max_steps: 1800
+  deterministic: true
+live:
+  enabled: true
+  directory: results/ppo_easy/live
