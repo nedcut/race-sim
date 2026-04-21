@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import os
+import platform
+import shutil
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -14,13 +19,20 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Drive the simplified MuJoCo car manually.")
     parser.add_argument("--config", type=Path, default=Path("configs/env.yaml"))
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--no-reexec",
+        action="store_true",
+        help="Do not relaunch through mjpython on macOS.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
+    args = parse_args()
+    maybe_reexec_with_mjpython(args)
+
     import mujoco.viewer
 
-    args = parse_args()
     env = RacingEnv(args.config)
     controller = HeuristicController(env.track)
     observation, info = env.reset(seed=args.seed)
@@ -60,7 +72,21 @@ def main() -> None:
         "A/D steer, C center, Space zero, H heuristic toggle, R reset, Q quit."
     )
 
-    with mujoco.viewer.launch_passive(env.model, env.data, key_callback=key_callback) as viewer:
+    try:
+        viewer_context = mujoco.viewer.launch_passive(
+            env.model,
+            env.data,
+            key_callback=key_callback,
+        )
+    except RuntimeError as exc:
+        if "mjpython" in str(exc):
+            raise RuntimeError(
+                "MuJoCo's passive viewer requires mjpython on macOS. "
+                "Run: mjpython -m racesim.scripts.keyboard_drive"
+            ) from exc
+        raise
+
+    with viewer_context as viewer:
         next_print = time.monotonic()
         while viewer.is_running() and not state["quit"]:
             if state["reset"]:
@@ -89,6 +115,34 @@ def main() -> None:
             time.sleep(env.frame_skip * env.model.opt.timestep)
 
         viewer.close()
+
+
+def maybe_reexec_with_mjpython(args: argparse.Namespace) -> None:
+    if args.no_reexec:
+        return
+    if platform.system() != "Darwin":
+        return
+    if Path(sys.executable).name == "mjpython":
+        return
+    if os.environ.get("RACESIM_MJPYTHON_REEXEC") == "1":
+        return
+
+    mjpython = shutil.which("mjpython")
+    if mjpython is None:
+        print(
+            "MuJoCo's viewer needs mjpython on macOS, but mjpython was not found. "
+            "Install MuJoCo's Python package or run the render command instead:\n"
+            "  racesim-render-rollout --controller heuristic --steps 1800",
+            file=sys.stderr,
+        )
+        return
+
+    env = os.environ.copy()
+    env["RACESIM_MJPYTHON_REEXEC"] = "1"
+    command = [mjpython, "-m", "racesim.scripts.keyboard_drive", *sys.argv[1:]]
+    print(f"Relaunching MuJoCo viewer with mjpython: {' '.join(command)}")
+    completed = subprocess.run(command, env=env, check=False)
+    raise SystemExit(completed.returncode)
 
 
 if __name__ == "__main__":

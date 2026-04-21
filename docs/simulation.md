@@ -45,4 +45,10 @@ Try manual driving in MuJoCo's native viewer:
 racesim-keyboard-drive
 ```
 
+On macOS, MuJoCo's passive viewer must run under `mjpython`. The `racesim-keyboard-drive` command automatically relaunches itself with `mjpython` when it can find it. If you want to run it manually:
+
+```bash
+mjpython -m racesim.scripts.keyboard_drive
+```
+
 Keyboard controls are printed when the script starts. Press `H` to toggle the heuristic autopilot.

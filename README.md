@@ -31,6 +31,8 @@ racesim-keyboard-drive
 
 The current car is a simplified direct-force/yaw MuJoCo body, not yet a tire/contact model. See [docs/simulation.md](docs/simulation.md) for what is worth trusting now, what is intentionally simplified, and how to manually drive or render rollouts.
 
+On macOS, the keyboard viewer uses MuJoCo's `mjpython`; `racesim-keyboard-drive` will relaunch itself with it when available.
+
 ## Near-Term Build Order
 
 1. Validate track math with tests and plots.
