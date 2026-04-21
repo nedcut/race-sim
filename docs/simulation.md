@@ -53,7 +53,7 @@ On macOS, MuJoCo's passive viewer must run under `mjpython`. The `racesim-keyboa
 mjpython -m racesim.scripts.keyboard_drive
 ```
 
-Keyboard controls are printed when the script starts. Press `H` to toggle the heuristic autopilot.
+Keyboard controls are printed when the script starts. Press `H` to toggle the heuristic autopilot. Press `1` for follow camera, `2` for top-down camera, and `3` for a reset free camera.
 
 If the viewer looks wrong, run the smoke check first:
 
