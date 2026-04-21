@@ -48,21 +48,21 @@ def main() -> None:
 
     def key_callback(key: int) -> None:
         char = chr(key).lower() if 0 <= key < 256 else ""
-        if char == "w":
+        if char == "i":
             command[1] = min(command[1] + 0.1, 1.0)
             command[2] = 0.0
-        elif char == "x":
+        elif char == "k":
             command[1] = max(command[1] - 0.1, 0.0)
-        elif char == "s":
+        elif char == "j":
             command[2] = min(command[2] + 0.1, 1.0)
             command[1] = 0.0
-        elif char == "e":
+        elif char == "u":
             command[2] = max(command[2] - 0.1, 0.0)
-        elif char == "a":
+        elif char == "f":
             command[0] = max(command[0] - 0.1, -1.0)
-        elif char == "d":
+        elif char == "g":
             command[0] = min(command[0] + 0.1, 1.0)
-        elif char == "c":
+        elif char == "t":
             command[0] = 0.0
         elif char == " ":
             command[:] = 0.0
@@ -80,8 +80,8 @@ def main() -> None:
             state["camera"] = "free"
 
     print(
-        "Keyboard drive controls: W/X throttle up/down, S/E brake up/down, "
-        "A/D steer, C center, Space zero, H heuristic toggle, R reset, Q quit. "
+        "Keyboard drive controls: I/K throttle up/down, J/U brake up/down, "
+        "F/G steer, T center, Space zero, H heuristic toggle, R reset, Q quit. "
         "Camera: 1 follow, 2 topdown, 3 free."
     )
 
