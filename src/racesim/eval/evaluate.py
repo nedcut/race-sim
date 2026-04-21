@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from racesim.controllers.heuristic import HeuristicController
+from racesim.controllers.factory import CONTROLLERS, make_controller
 from racesim.env.racing_env import RacingEnv
 from racesim.eval.metrics import EpisodeMetrics, summarize_episodes
 
@@ -15,7 +15,7 @@ from racesim.eval.metrics import EpisodeMetrics, summarize_episodes
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate a controller on the racing environment.")
     parser.add_argument("--config", type=Path, default=Path("configs/env.yaml"))
-    parser.add_argument("--controller", choices=("heuristic", "open_loop"), default="heuristic")
+    parser.add_argument("--controller", choices=CONTROLLERS, default="centerline")
     parser.add_argument("--episodes", type=int, default=5)
     parser.add_argument("--max-steps", type=int, default=3000)
     parser.add_argument("--seed", type=int, default=0)
@@ -54,7 +54,7 @@ def evaluate(
     record_trajectory: bool = False,
 ) -> dict:
     env = RacingEnv(config_path)
-    controller = HeuristicController(env.track)
+    controller = make_controller(controller_name, env.track)
     episode_results = []
 
     for episode_index in range(episodes):
@@ -89,7 +89,7 @@ def evaluate(
 
 def run_episode(
     env: RacingEnv,
-    controller: HeuristicController,
+    controller: object,
     controller_name: str,
     episode: int,
     seed: int,
@@ -102,12 +102,7 @@ def run_episode(
     trajectory = []
 
     for _step in range(max_steps):
-        if controller_name == "heuristic":
-            action = controller.act(observation, info)
-        elif controller_name == "open_loop":
-            action = np.array([0.05, 0.35, 0.0], dtype=np.float32)
-        else:
-            raise ValueError(f"Unsupported controller: {controller_name}")
+        action = controller.act(observation, info)
 
         observation, reward, terminated, truncated, info = env.step(action)
         total_reward += reward

@@ -7,14 +7,14 @@ import imageio.v2 as imageio
 import matplotlib.pyplot as plt
 import numpy as np
 
-from racesim.controllers.heuristic import HeuristicController
+from racesim.controllers.factory import CONTROLLERS, make_controller
 from racesim.env.racing_env import RacingEnv
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Render a top-down rollout GIF and trace plot.")
     parser.add_argument("--config", type=Path, default=Path("configs/env.yaml"))
-    parser.add_argument("--controller", choices=("heuristic", "open_loop"), default="heuristic")
+    parser.add_argument("--controller", choices=CONTROLLERS, default="centerline")
     parser.add_argument("--steps", type=int, default=1800)
     parser.add_argument("--every", type=int, default=8)
     parser.add_argument("--fps", type=int, default=24)
@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     env = RacingEnv(args.config)
-    controller = HeuristicController(env.track)
+    controller = make_controller(args.controller, env.track)
     states, final_info = collect_rollout(env, controller, args.controller, args.steps, args.every)
 
     args.gif.parent.mkdir(parents=True, exist_ok=True)
@@ -43,7 +43,7 @@ def main() -> None:
 
 def collect_rollout(
     env: RacingEnv,
-    controller: HeuristicController,
+    controller: object,
     controller_name: str,
     steps: int,
     every: int,
@@ -52,11 +52,7 @@ def collect_rollout(
     states: list[dict] = []
 
     for step in range(steps):
-        if controller_name == "heuristic":
-            action = controller.act(observation, info)
-        else:
-            action = np.array([0.05, 0.35, 0.0], dtype=np.float32)
-
+        action = controller.act(observation, info)
         observation, reward, terminated, truncated, info = env.step(action)
         if step % every == 0 or terminated or truncated:
             states.append(

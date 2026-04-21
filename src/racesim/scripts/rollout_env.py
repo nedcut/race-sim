@@ -3,9 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import numpy as np
-
-from racesim.controllers.heuristic import HeuristicController
+from racesim.controllers.factory import CONTROLLERS, make_controller
 from racesim.env.racing_env import RacingEnv
 
 
@@ -16,8 +14,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--controller",
-        choices=("heuristic", "open_loop"),
-        default="heuristic",
+        choices=CONTROLLERS,
+        default="centerline",
     )
     return parser.parse_args()
 
@@ -26,7 +24,7 @@ def main() -> None:
     args = parse_args()
     env = RacingEnv(args.config)
     observation, info = env.reset(seed=args.seed)
-    controller = HeuristicController(env.track)
+    controller = make_controller(args.controller, env.track)
 
     total_reward = 0.0
     terminated = False
@@ -35,11 +33,7 @@ def main() -> None:
 
     steps_taken = 0
     for _step in range(args.steps):
-        if args.controller == "heuristic":
-            action = controller.act(observation, last_info)
-        else:
-            action = np.array([0.05, 0.35, 0.0], dtype=np.float32)
-
+        action = controller.act(observation, last_info)
         observation, reward, terminated, truncated, last_info = env.step(action)
         total_reward += reward
         steps_taken += 1

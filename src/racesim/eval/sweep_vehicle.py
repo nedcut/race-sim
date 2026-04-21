@@ -7,7 +7,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
-from racesim.controllers.heuristic import HeuristicController
+from racesim.controllers.factory import make_controller
 from racesim.env.racing_env import RacingEnv
 from racesim.eval.evaluate import run_episode
 from racesim.eval.metrics import EpisodeMetrics, summarize_episodes
@@ -53,7 +53,7 @@ def run_sweep(
             rear_cornering_stiffness=env.control.rear_cornering_stiffness * case["grip_scale"],
             max_lateral_force=env.control.max_lateral_force * case["grip_scale"],
         )
-        controller = HeuristicController(env.track)
+        controller = make_controller("centerline", env.track)
         episode_metrics: list[EpisodeMetrics] = []
 
         for episode_index in range(episodes):

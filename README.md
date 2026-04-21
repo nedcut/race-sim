@@ -11,7 +11,7 @@ This repository studies continuous control for autonomous racing in a simplified
 - Track plotting script
 - Minimal MuJoCo/Gymnasium environment with continuous steering/throttle/brake actions
 - Bicycle-style vehicle dynamics with front steering, drivetrain split, tire-force proxies, and action smoothing
-- Heuristic baseline controller that completes the oval track
+- Centerline and racing-line heuristic baselines that complete the oval track
 
 ## Quick Start
 
@@ -26,8 +26,12 @@ racesim-rollout --controller heuristic --steps 1800
 racesim-evaluate --controller heuristic --episodes 5 --output results/eval_heuristic.json
 racesim-evaluate --controller heuristic --episodes 1 --record-trajectory --output results/eval_heuristic_trajectory.json
 racesim-plot-rollout --input results/eval_heuristic_trajectory.json --output-dir results/plots
+racesim-evaluate --controller centerline --episodes 1 --record-trajectory --output results/eval_centerline_trajectory.json
+racesim-evaluate --controller racing_line --episodes 1 --record-trajectory --output results/eval_racing_line_trajectory.json
+racesim-compare-rollouts --input results/eval_centerline_trajectory.json results/eval_racing_line_trajectory.json --output-dir results/comparison
 racesim-sweep-vehicle --episodes 3
 racesim-render-rollout --controller heuristic --steps 1800
+racesim-make-track-visual --track configs/tracks/technical.yaml --output assets/mjcf/technical_track.xml --model-name technical_track_visuals
 racesim-keyboard-drive
 ```
 
@@ -41,6 +45,8 @@ The rollout plotting command produces:
 - `lateral_error_vs_progress.png`
 
 The vehicle sweep compares `rwd`, `fwd`, and `awd` under low/nominal/high grip scales and writes CSV/JSON summaries to `results/`.
+
+The comparison plotting command overlays recorded controller trajectories and writes a compact summary table. The technical track config/world are available through `configs/env_technical.yaml`; the current heuristics do not complete it reliably yet, which makes it a useful held-out challenge.
 
 ## Inspecting The Simulator
 

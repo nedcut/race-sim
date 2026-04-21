@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from racesim.controllers.heuristic import HeuristicController
+from racesim.controllers.factory import make_controller
 from racesim.env.racing_env import RacingEnv
 
 
@@ -40,7 +40,7 @@ def main() -> None:
     import mujoco.viewer
 
     env = RacingEnv(args.config)
-    controller = HeuristicController(env.track)
+    controller = make_controller("centerline", env.track)
     observation, info = env.reset(seed=args.seed)
 
     command = np.array([0.0, 0.0, 0.0], dtype=np.float32)
