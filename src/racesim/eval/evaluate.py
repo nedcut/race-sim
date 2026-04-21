@@ -18,6 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--controller", choices=CONTROLLERS, default="centerline")
     parser.add_argument("--episodes", type=int, default=5)
     parser.add_argument("--max-steps", type=int, default=3000)
+    parser.add_argument("--lap-target", type=float, default=None)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output", type=Path, default=Path("results/eval_heuristic.json"))
     parser.add_argument(
@@ -37,6 +38,7 @@ def main() -> None:
         max_steps=args.max_steps,
         seed=args.seed,
         record_trajectory=args.record_trajectory,
+        lap_target=args.lap_target,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -52,8 +54,12 @@ def evaluate(
     max_steps: int,
     seed: int,
     record_trajectory: bool = False,
+    lap_target: float | None = None,
 ) -> dict:
     env = RacingEnv(config_path)
+    env.max_episode_steps = max_steps
+    if lap_target is not None:
+        env.lap_target = lap_target
     controller = make_controller(controller_name, env.track)
     episode_results = []
 

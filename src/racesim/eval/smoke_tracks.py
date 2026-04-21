@@ -15,13 +15,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--catalog", type=Path, default=Path("configs/track_catalog.yaml"))
     parser.add_argument("--controller", choices=CONTROLLERS, default="racing_line")
     parser.add_argument("--steps", type=int, default=1200)
+    parser.add_argument("--lap-target", type=float, default=1.0)
     parser.add_argument("--output", type=Path, default=Path("results/track_smoke.csv"))
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    rows = smoke_tracks(args.catalog, args.controller, args.steps)
+    rows = smoke_tracks(args.catalog, args.controller, args.steps, args.lap_target)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(
@@ -38,11 +39,18 @@ def main() -> None:
     print(f"Wrote {args.output}")
 
 
-def smoke_tracks(catalog_path: Path, controller_name: str, steps: int) -> list[dict]:
+def smoke_tracks(
+    catalog_path: Path,
+    controller_name: str,
+    steps: int,
+    lap_target: float = 1.0,
+) -> list[dict]:
     tracks = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["tracks"]
     rows = []
     for name, entry in tracks.items():
         env = RacingEnv(entry["env"])
+        env.max_episode_steps = steps
+        env.lap_target = lap_target
         controller = make_controller(controller_name, env.track)
         observation, info = env.reset(seed=0)
         step_count = 0

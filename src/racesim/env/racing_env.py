@@ -87,6 +87,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.frame_skip = int(sim_config.get("frame_skip", 1))
         self.max_episode_steps = int(sim_config.get("max_episode_steps", 3000))
         self.initial_speed = float(sim_config.get("initial_speed", 0.0))
+        self.lap_target = float(sim_config.get("lap_target", 1.0))
 
         self.control = ControlConfig(**self.config.get("control", {}))
         self.reward_config = RewardConfig(**self.config.get("reward", {}))
@@ -225,7 +226,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.cumulative_forward_progress += max(progress_delta, 0.0)
 
         off_track = self.track.is_off_track(pose[:2], margin=self.off_track_margin)
-        lap_complete = self.cumulative_forward_progress >= self.track.length
+        lap_complete = self._lap_complete()
         reward_terms = {
             "progress": self.reward_config.progress * progress_delta,
             "lateral_error": -self.reward_config.lateral_error * abs(projection.lateral_error),
@@ -374,7 +375,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             "lateral_error": projection.lateral_error,
             "heading_error": projection.heading_error,
             "off_track": abs(projection.lateral_error) > self.track.half_width,
-            "lap_complete": self.cumulative_forward_progress >= self.track.length,
+            "lap_complete": self._lap_complete(),
             "reward_terms": reward_terms,
         }
 
@@ -387,6 +388,9 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
 
     def _yaw_rate(self) -> float:
         return float(self.data.qvel[self.root_dof_adr + 5])
+
+    def _lap_complete(self) -> bool:
+        return self.cumulative_forward_progress >= self.lap_target * self.track.length
 
 
 def yaw_to_quat(yaw: float) -> np.ndarray:

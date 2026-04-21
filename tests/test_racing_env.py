@@ -43,3 +43,14 @@ def test_env_eventually_truncates_when_step_limit_is_small() -> None:
     )
 
     assert truncated
+
+
+def test_env_can_target_more_than_one_lap() -> None:
+    env = RacingEnv("configs/env.yaml")
+    env.lap_target = 2.0
+
+    assert not env._lap_complete()
+    env.cumulative_forward_progress = 1.5 * env.track.length
+    assert not env._lap_complete()
+    env.cumulative_forward_progress = 2.0 * env.track.length
+    assert env._lap_complete()
