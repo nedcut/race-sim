@@ -145,7 +145,7 @@ def apply_viewer_camera(viewer: object, env: RacingEnv, camera_name: str) -> Non
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
         viewer.cam.lookat[:] = [pose[0], pose[1], 0.8]
         viewer.cam.distance = 8.0
-        viewer.cam.azimuth = yaw_degrees + 180.0
+        viewer.cam.azimuth = yaw_degrees
         viewer.cam.elevation = -18.0
         return
 
