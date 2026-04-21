@@ -10,6 +10,8 @@ This project currently uses a deliberately simple MuJoCo vehicle model. The car 
 
 That means the current car is useful for testing the environment loop, reward, progress metric, heuristic baseline, and evaluation tooling. It is not yet a wheel/contact tire model.
 
+The default MuJoCo world now includes an oval track surface, red boundaries, and centerline markers so the native viewer matches the Python-side track geometry used for reward and evaluation.
+
 ## What Is Worth Trusting Now
 
 - Track-relative progress, lateral error, heading error, and lap completion.
@@ -52,3 +54,11 @@ mjpython -m racesim.scripts.keyboard_drive
 ```
 
 Keyboard controls are printed when the script starts. Press `H` to toggle the heuristic autopilot.
+
+If the viewer looks wrong, run the smoke check first:
+
+```bash
+racesim-smoke-mujoco
+```
+
+The compiled model should include hundreds of geoms because the visual track is part of the MuJoCo scene.
