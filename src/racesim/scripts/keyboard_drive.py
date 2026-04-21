@@ -59,9 +59,9 @@ def main() -> None:
         elif char == "u":
             command[2] = max(command[2] - 0.1, 0.0)
         elif char == "f":
-            command[0] = max(command[0] - 0.1, -1.0)
-        elif char == "g":
             command[0] = min(command[0] + 0.1, 1.0)
+        elif char == "g":
+            command[0] = max(command[0] - 0.1, -1.0)
         elif char == "t":
             command[0] = 0.0
         elif char == " ":

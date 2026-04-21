@@ -16,11 +16,22 @@ from racesim.utils.geometry import wrap_angle
 
 @dataclass(frozen=True)
 class ControlConfig:
-    max_drive_force: float = 280.0
-    max_brake_force: float = 360.0
-    max_yaw_torque: float = 85.0
-    lateral_damping: float = 90.0
-    linear_drag: float = 0.9
+    drivetrain: str = "rwd"
+    max_steer_angle: float = 0.55
+    steer_rate: float = 3.5
+    throttle_rate: float = 4.0
+    brake_rate: float = 6.0
+    max_drive_force: float = 420.0
+    max_brake_force: float = 520.0
+    front_cornering_stiffness: float = 1450.0
+    rear_cornering_stiffness: float = 1750.0
+    max_lateral_force: float = 950.0
+    yaw_damping: float = 35.0
+    linear_drag: float = 1.4
+    rolling_resistance: float = 12.0
+    wheelbase: float = 1.35
+    center_of_mass_to_front: float = 0.68
+    center_of_mass_to_rear: float = 0.67
 
 
 @dataclass(frozen=True)
@@ -88,6 +99,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.step_count = 0
         self.previous_progress = 0.0
         self.cumulative_forward_progress = 0.0
+        self.smoothed_action = np.zeros(3, dtype=float)
 
     @staticmethod
     def _load_config(path: Path) -> dict[str, Any]:
@@ -128,6 +140,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         projection = self.track.project(point, heading=heading)
         self.previous_progress = projection.progress
         self.cumulative_forward_progress = 0.0
+        self.smoothed_action[:] = 0.0
         self.step_count = 0
 
         observation = self._observation(projection)
@@ -142,7 +155,8 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
 
         previous_progress = self.previous_progress
         for _ in range(self.frame_skip):
-            self._apply_action(action)
+            self._update_smoothed_action(action)
+            self._apply_action()
             mujoco.mj_step(self.model, self.data)
             self.data.xfrc_applied[:] = 0.0
 
@@ -169,8 +183,21 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         observation = self._observation(projection)
         return observation, reward, terminated, truncated, self._info(projection, reward_terms)
 
-    def _apply_action(self, action: np.ndarray) -> None:
-        steering, throttle, brake = action
+    def _update_smoothed_action(self, action: np.ndarray) -> None:
+        dt = self.model.opt.timestep
+        rates = np.array(
+            [
+                self.control.steer_rate,
+                self.control.throttle_rate,
+                self.control.brake_rate,
+            ],
+            dtype=float,
+        )
+        delta = np.clip(action - self.smoothed_action, -rates * dt, rates * dt)
+        self.smoothed_action += delta
+
+    def _apply_action(self) -> None:
+        steering, throttle, brake = self.smoothed_action
         x, y, yaw = self._pose()
         del x, y
 
@@ -180,19 +207,67 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
 
         forward_speed = float(np.dot(velocity, forward))
         lateral_speed = float(np.dot(velocity, lateral))
+        yaw_rate = self._yaw_rate()
+        steer_angle = steering * self.control.max_steer_angle
+        safe_speed = np.copysign(max(abs(forward_speed), 0.75), forward_speed or 1.0)
+
+        lf = self.control.center_of_mass_to_front
+        lr = self.control.center_of_mass_to_rear
+        front_slip = np.arctan2(lateral_speed + lf * yaw_rate, abs(safe_speed)) - steer_angle
+        rear_slip = np.arctan2(lateral_speed - lr * yaw_rate, abs(safe_speed))
+
+        front_lateral_force = np.clip(
+            -self.control.front_cornering_stiffness * front_slip,
+            -self.control.max_lateral_force,
+            self.control.max_lateral_force,
+        )
+        rear_lateral_force = np.clip(
+            -self.control.rear_cornering_stiffness * rear_slip,
+            -self.control.max_lateral_force,
+            self.control.max_lateral_force,
+        )
+
         drive_force = throttle * self.control.max_drive_force
         brake_force = brake * self.control.max_brake_force * np.sign(forward_speed)
         drag_force = self.control.linear_drag * forward_speed * abs(forward_speed)
-        lateral_grip_force = self.control.lateral_damping * lateral_speed
+        rolling_force = self.control.rolling_resistance * np.sign(forward_speed)
+        longitudinal_force = drive_force - brake_force - drag_force - rolling_force
 
-        force = (
-            (drive_force - brake_force - drag_force) * forward
-            - lateral_grip_force * lateral
+        front_drive_fraction, rear_drive_fraction = self._drive_split()
+        front_forward_force = longitudinal_force * front_drive_fraction
+        rear_forward_force = longitudinal_force * rear_drive_fraction
+
+        front_direction = normalize_2d(
+            np.cos(steer_angle) * forward + np.sin(steer_angle) * lateral
         )
-        yaw_torque = steering * self.control.max_yaw_torque * max(abs(forward_speed), 0.5)
+        front_lateral_direction = normalize_2d(
+            -np.sin(steer_angle) * forward + np.cos(steer_angle) * lateral
+        )
+
+        front_force = (
+            front_forward_force * front_direction
+            + front_lateral_force * front_lateral_direction
+        )
+        rear_force = rear_forward_force * forward + rear_lateral_force * lateral
+        force = front_force + rear_force
+        yaw_torque = (
+            lf * cross_z(forward, front_force)
+            - lr * cross_z(forward, rear_force)
+            - self.control.yaw_damping * yaw_rate
+        )
 
         self.data.xfrc_applied[self.car_body_id, 0:3] = force
         self.data.xfrc_applied[self.car_body_id, 5] = yaw_torque
+
+    def _drive_split(self) -> tuple[float, float]:
+        drivetrain = self.control.drivetrain.lower()
+        if drivetrain == "fwd":
+            return 1.0, 0.0
+        if drivetrain == "awd":
+            return 0.5, 0.5
+        if drivetrain == "rwd":
+            return 0.0, 1.0
+        raise ValueError(f"Unsupported drivetrain: {self.control.drivetrain}")
 
     def _observation(self, projection: Any) -> np.ndarray:
         velocity = self._linear_velocity()
@@ -238,6 +313,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             "longitudinal_speed": longitudinal_speed,
             "lateral_speed": lateral_speed,
             "yaw_rate": self._yaw_rate(),
+            "smoothed_action": self.smoothed_action.copy(),
             "lateral_error": projection.lateral_error,
             "heading_error": projection.heading_error,
             "off_track": abs(projection.lateral_error) > self.track.half_width,
@@ -265,3 +341,14 @@ def quat_to_yaw(quat: np.ndarray) -> float:
     siny_cosp = 2.0 * (w * z + x * y)
     cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
     return float(wrap_angle(np.arctan2(siny_cosp, cosy_cosp)))
+
+
+def normalize_2d(vector: np.ndarray) -> np.ndarray:
+    norm = np.linalg.norm(vector[:2])
+    if norm <= 1e-12:
+        return vector
+    return vector / norm
+
+
+def cross_z(a: np.ndarray, b: np.ndarray) -> float:
+    return float(a[0] * b[1] - a[1] * b[0])

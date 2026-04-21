@@ -10,6 +10,7 @@ This repository studies continuous control for autonomous racing in a simplified
 - Unit tests for progress, lateral error, heading error, and off-track checks
 - Track plotting script
 - Minimal MuJoCo/Gymnasium environment with continuous steering/throttle/brake actions
+- Bicycle-style vehicle dynamics with front steering, drivetrain split, tire-force proxies, and action smoothing
 - Heuristic baseline controller that completes the oval track
 
 ## Quick Start

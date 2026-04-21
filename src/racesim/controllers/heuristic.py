@@ -13,11 +13,11 @@ class HeuristicController:
     """PID-ish baseline controller for the simplified racing environment."""
 
     track: ClosedTrack
-    max_speed: float = 9.0
-    min_speed: float = 2.0
-    curvature_gain: float = 160.0
-    lateral_gain: float = 0.90
-    heading_gain: float = 2.25
+    max_speed: float = 8.0
+    min_speed: float = 2.5
+    curvature_gain: float = 100.0
+    lateral_gain: float = 1.20
+    heading_gain: float = 2.80
     speed_gain: float = 0.24
 
     def act(self, observation: np.ndarray, info: dict) -> np.ndarray:

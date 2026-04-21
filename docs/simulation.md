@@ -1,14 +1,14 @@
 # Current Simulation Model
 
-This project currently uses a deliberately simple MuJoCo vehicle model. The car is a free chassis body with visual wheel geometry. The controller applies:
+This project currently uses a simplified MuJoCo vehicle model. The car is a free chassis body with visual wheel geometry. The environment applies a bicycle-style tire-force proxy:
 
-- forward drive force from throttle
-- opposing force from brake
-- quadratic-ish forward drag
-- lateral damping as a grip proxy
-- yaw torque from steering
+- front steering angle from the steering action
+- front/rear lateral tire-force proxies from slip angles
+- configurable drivetrain split: `rwd`, `fwd`, or `awd`
+- throttle and brake longitudinal forces
+- drag, rolling resistance, yaw damping, and action smoothing
 
-That means the current car is useful for testing the environment loop, reward, progress metric, heuristic baseline, and evaluation tooling. It is not yet a wheel/contact tire model.
+That means the current car is useful for testing the environment loop, reward, progress metric, heuristic baseline, and evaluation tooling. It should feel more car-like than raw yaw torque, but it is not yet a full wheel/contact tire model.
 
 The default MuJoCo world now includes an oval track surface, red boundaries, and centerline markers so the native viewer matches the Python-side track geometry used for reward and evaluation.
 
@@ -16,14 +16,14 @@ The default MuJoCo world now includes an oval track surface, red boundaries, and
 
 - Track-relative progress, lateral error, heading error, and lap completion.
 - Whether a controller can follow the track without leaving it.
-- Coarse behavior under different force, damping, and grip-like parameters.
+- Coarse behavior under different force, damping, drivetrain, and grip-like parameters.
 - Baseline-vs-learned evaluation plumbing once RL is added.
 
 ## What Is Not Worth Claiming Yet
 
 - Realistic tire slip.
 - Suspension behavior.
-- Wheel torque transfer.
+- Physical wheel torque transfer through tire contacts.
 - F1-like dynamics.
 - A physically meaningful lap time.
 
