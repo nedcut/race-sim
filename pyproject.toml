@@ -34,6 +34,8 @@ racesim-rollout = "racesim.scripts.rollout_env:main"
 racesim-evaluate = "racesim.eval.evaluate:main"
 racesim-keyboard-drive = "racesim.scripts.keyboard_drive:main"
 racesim-render-rollout = "racesim.scripts.render_rollout:main"
+racesim-plot-rollout = "racesim.eval.plots:main"
+racesim-sweep-vehicle = "racesim.eval.sweep_vehicle:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/racesim"]

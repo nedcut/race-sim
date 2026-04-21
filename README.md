@@ -24,9 +24,23 @@ racesim-plot-track --config configs/tracks/oval.yaml --output results/oval_track
 racesim-smoke-mujoco
 racesim-rollout --controller heuristic --steps 1800
 racesim-evaluate --controller heuristic --episodes 5 --output results/eval_heuristic.json
+racesim-evaluate --controller heuristic --episodes 1 --record-trajectory --output results/eval_heuristic_trajectory.json
+racesim-plot-rollout --input results/eval_heuristic_trajectory.json --output-dir results/plots
+racesim-sweep-vehicle --episodes 3
 racesim-render-rollout --controller heuristic --steps 1800
 racesim-keyboard-drive
 ```
+
+## Analysis Outputs
+
+The rollout plotting command produces:
+
+- `trajectory.png`
+- `speed_vs_progress.png`
+- `controls_vs_progress.png`
+- `lateral_error_vs_progress.png`
+
+The vehicle sweep compares `rwd`, `fwd`, and `awd` under low/nominal/high grip scales and writes CSV/JSON summaries to `results/`.
 
 ## Inspecting The Simulator
 
