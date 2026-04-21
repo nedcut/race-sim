@@ -92,3 +92,13 @@ def test_progress_gate_reward_fires_when_crossing_cumulative_gate() -> None:
     )
 
     assert info["reward_terms"]["progress_gate"] >= 2.5
+
+
+def test_progress_delta_is_capped_by_physical_motion() -> None:
+    env = RacingEnv("configs/env_stop_go.yaml")
+
+    progress_delta = env._validated_progress_delta(raw_delta=100.0, physical_delta=1.0)
+
+    assert progress_delta == env.termination_config.max_progress_delta_factor + (
+        env.termination_config.max_progress_delta_slack
+    )

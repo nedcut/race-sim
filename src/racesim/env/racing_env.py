@@ -58,6 +58,8 @@ class TerminationConfig:
     off_track_margin: float = 0.0
     no_progress_window_steps: int = 0
     no_progress_min_delta: float = 0.0
+    max_progress_delta_factor: float = 2.0
+    max_progress_delta_slack: float = 0.5
 
 
 @dataclass(frozen=True)
@@ -262,6 +264,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         )
 
         previous_progress = self.previous_progress
+        previous_position = self._pose()[:2]
         for _ in range(self.frame_skip):
             self._update_smoothed_action(action)
             self._apply_action()
@@ -271,7 +274,10 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.step_count += 1
         pose = self._pose()
         projection = self.track.project(pose[:2], heading=pose[2])
-        progress_delta = self.track.progress_delta(previous_progress, projection.progress)
+        raw_progress_delta = self.track.progress_delta(previous_progress, projection.progress)
+        physical_delta = float(np.linalg.norm(pose[:2] - previous_position))
+        progress_delta = self._validated_progress_delta(raw_progress_delta, physical_delta)
+        progress_delta_clipped = not np.isclose(progress_delta, raw_progress_delta)
         self.previous_progress = projection.progress
         self.cumulative_forward_progress += max(progress_delta, 0.0)
         gates_crossed = self._consume_progress_gates()
@@ -301,7 +307,19 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         terminated = off_track or lap_complete
         truncated = self.step_count >= self.max_episode_steps or no_progress_timeout
         observation = self._observation(projection)
-        return observation, reward, terminated, truncated, self._info(projection, reward_terms)
+        return (
+            observation,
+            reward,
+            terminated,
+            truncated,
+            self._info(
+                projection,
+                reward_terms,
+                progress_delta=progress_delta,
+                raw_progress_delta=raw_progress_delta,
+                progress_delta_clipped=progress_delta_clipped,
+            ),
+        )
 
     def _update_smoothed_action(self, action: np.ndarray) -> None:
         dt = self.model.opt.timestep
@@ -500,7 +518,14 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             return False
         return self.cumulative_forward_progress - oldest_progress < min_delta
 
-    def _info(self, projection: Any, reward_terms: dict[str, float]) -> dict[str, Any]:
+    def _info(
+        self,
+        projection: Any,
+        reward_terms: dict[str, float],
+        progress_delta: float = 0.0,
+        raw_progress_delta: float = 0.0,
+        progress_delta_clipped: bool = False,
+    ) -> dict[str, Any]:
         pose = self._pose()
         velocity = self._linear_velocity()
         yaw = pose[2]
@@ -513,6 +538,9 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             "progress": projection.progress,
             "lap_fraction": projection.progress / self.track.length,
             "cumulative_lap_fraction": self.cumulative_forward_progress / self.track.length,
+            "progress_delta": progress_delta,
+            "raw_progress_delta": raw_progress_delta,
+            "progress_delta_clipped": progress_delta_clipped,
             "position": pose[:2].copy(),
             "heading": float(pose[2]),
             "speed": float(np.linalg.norm(velocity[:2])),
@@ -540,6 +568,15 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             self.step_count - oldest_step >= window
             and self.cumulative_forward_progress - oldest_progress < min_delta
         )
+
+    def _validated_progress_delta(self, raw_delta: float, physical_delta: float) -> float:
+        max_delta = (
+            self.termination_config.max_progress_delta_factor * physical_delta
+            + self.termination_config.max_progress_delta_slack
+        )
+        if max_delta <= 0.0:
+            return raw_delta
+        return float(np.clip(raw_delta, -max_delta, max_delta))
 
     def _pose(self) -> np.ndarray:
         qpos = self.data.qpos[self.root_qpos_adr : self.root_qpos_adr + 7]
