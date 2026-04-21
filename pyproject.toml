@@ -38,6 +38,7 @@ racesim-make-track-visual = "racesim.scripts.make_track_visual:main"
 racesim-plot-rollout = "racesim.eval.plots:main"
 racesim-compare-rollouts = "racesim.eval.compare_rollouts:main"
 racesim-sweep-vehicle = "racesim.eval.sweep_vehicle:main"
+racesim-smoke-tracks = "racesim.eval.smoke_tracks:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/racesim"]

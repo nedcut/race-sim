@@ -48,7 +48,7 @@ def track_visual_xml(track: ClosedTrack, model_name: str) -> str:
     lines = [
         f'<mujoco model="{model_name}">',
         "  <asset>",
-        f'    <mesh name="track_surface_mesh" vertex="{format_values(vertices)}" '
+        f'    <mesh name="track_surface_mesh" inertia="shell" vertex="{format_values(vertices)}" '
         f'face="{format_values(faces)}"/>',
         '    <material name="track_asphalt" rgba="0.48 0.49 0.46 1" emission="0.08"/>',
         '    <material name="track_boundary" rgba="0.95 0.08 0.06 1" emission="0.05"/>',

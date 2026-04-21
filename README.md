@@ -12,6 +12,8 @@ This repository studies continuous control for autonomous racing in a simplified
 - Minimal MuJoCo/Gymnasium environment with continuous steering/throttle/brake actions
 - Bicycle-style vehicle dynamics with front steering, drivetrain split, tire-force proxies, and action smoothing
 - Centerline and racing-line heuristic baselines that complete the oval track
+- Track catalog with spline-based layouts for curriculum/generalization
+- Reset randomization for progress, lateral offset, heading error, and initial speed
 
 ## Quick Start
 
@@ -30,6 +32,7 @@ racesim-evaluate --controller centerline --episodes 1 --record-trajectory --outp
 racesim-evaluate --controller racing_line --episodes 1 --record-trajectory --output results/eval_racing_line_trajectory.json
 racesim-compare-rollouts --input results/eval_centerline_trajectory.json results/eval_racing_line_trajectory.json --output-dir results/comparison
 racesim-sweep-vehicle --episodes 3
+racesim-smoke-tracks --controller racing_line --steps 1200 --output results/track_smoke.csv
 racesim-render-rollout --controller heuristic --steps 1800
 racesim-make-track-visual --track configs/tracks/technical.yaml --output assets/mjcf/technical_track.xml --model-name technical_track_visuals
 racesim-keyboard-drive
@@ -47,6 +50,8 @@ The rollout plotting command produces:
 The vehicle sweep compares `rwd`, `fwd`, and `awd` under low/nominal/high grip scales and writes CSV/JSON summaries to `results/`.
 
 The comparison plotting command overlays recorded controller trajectories and writes a compact summary table. The technical track config/world are available through `configs/env_technical.yaml`; the current heuristics do not complete it reliably yet, which makes it a useful held-out challenge.
+
+The track catalog lives in [configs/track_catalog.yaml](configs/track_catalog.yaml). Use `racesim-smoke-tracks` to quickly see which tracks are easy, intermediate, or failure cases for a controller.
 
 ## Inspecting The Simulator
 

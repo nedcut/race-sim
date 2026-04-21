@@ -42,6 +42,16 @@ class RewardConfig:
     off_track: float = 25.0
 
 
+@dataclass(frozen=True)
+class ResetRandomizationConfig:
+    enabled: bool = False
+    progress: bool = False
+    lateral_offset: float = 0.0
+    heading_error: float = 0.0
+    speed_min: float | None = None
+    speed_max: float | None = None
+
+
 class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
     """Minimal MuJoCo racing environment.
 
@@ -80,6 +90,9 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
 
         self.control = ControlConfig(**self.config.get("control", {}))
         self.reward_config = RewardConfig(**self.config.get("reward", {}))
+        self.reset_randomization = ResetRandomizationConfig(
+            **self.config.get("reset_randomization", {})
+        )
         self.off_track_margin = float(
             self.config.get("termination", {}).get("off_track_margin", 0.0)
         )
@@ -121,17 +134,22 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
     ) -> tuple[np.ndarray, dict[str, Any]]:
         super().reset(seed=seed)
         options = options or {}
-        start_progress = float(options.get("progress", 0.0))
+        randomize = bool(options.get("randomize", self.reset_randomization.enabled))
+        start_progress = self._reset_progress(options, randomize)
 
-        point, tangent, _normal = self.track.sample_at(start_progress)
+        point, tangent, normal = self.track.sample_at(start_progress)
         heading = float(np.arctan2(tangent[1], tangent[0]))
+        lateral_offset = self._reset_lateral_offset(options, randomize)
+        heading += self._reset_heading_error(options, randomize)
+        initial_speed = self._reset_initial_speed(options, randomize)
+        point = point + lateral_offset * normal
         quat = yaw_to_quat(heading)
 
         self.data.qpos[:] = 0.0
         self.data.qvel[:] = 0.0
         self.data.qpos[self.root_qpos_adr : self.root_qpos_adr + 3] = [point[0], point[1], 0.32]
         self.data.qpos[self.root_qpos_adr + 3 : self.root_qpos_adr + 7] = quat
-        self.data.qvel[self.root_dof_adr : self.root_dof_adr + 3] = self.initial_speed * np.array(
+        self.data.qvel[self.root_dof_adr : self.root_dof_adr + 3] = initial_speed * np.array(
             [tangent[0], tangent[1], 0.0]
         )
         self.data.xfrc_applied[:] = 0.0
@@ -145,6 +163,45 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
 
         observation = self._observation(projection)
         return observation, self._info(projection, reward_terms={})
+
+    def _reset_progress(self, options: dict[str, Any], randomize: bool) -> float:
+        if "progress" in options:
+            return float(options["progress"])
+        if randomize and self.reset_randomization.progress:
+            return float(self.np_random.uniform(0.0, self.track.length))
+        return 0.0
+
+    def _reset_lateral_offset(self, options: dict[str, Any], randomize: bool) -> float:
+        if "lateral_offset" in options:
+            return float(options["lateral_offset"])
+        if randomize and self.reset_randomization.lateral_offset > 0:
+            limit = min(self.reset_randomization.lateral_offset, self.track.half_width * 0.85)
+            return float(self.np_random.uniform(-limit, limit))
+        return 0.0
+
+    def _reset_heading_error(self, options: dict[str, Any], randomize: bool) -> float:
+        if "heading_error" in options:
+            return float(options["heading_error"])
+        if randomize and self.reset_randomization.heading_error > 0:
+            limit = self.reset_randomization.heading_error
+            return float(self.np_random.uniform(-limit, limit))
+        return 0.0
+
+    def _reset_initial_speed(self, options: dict[str, Any], randomize: bool) -> float:
+        if "initial_speed" in options:
+            return float(options["initial_speed"])
+        if (
+            randomize
+            and self.reset_randomization.speed_min is not None
+            and self.reset_randomization.speed_max is not None
+        ):
+            return float(
+                self.np_random.uniform(
+                    self.reset_randomization.speed_min,
+                    self.reset_randomization.speed_max,
+                )
+            )
+        return self.initial_speed
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         action = np.clip(

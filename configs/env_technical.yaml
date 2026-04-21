@@ -30,3 +30,10 @@ reward:
   lateral_error: 0.05
   heading_error: 0.02
   off_track: 25.0
+reset_randomization:
+  enabled: false
+  progress: true
+  lateral_offset: 1.5
+  heading_error: 0.25
+  speed_min: 1.0
+  speed_max: 4.0

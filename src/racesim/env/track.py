@@ -76,6 +76,13 @@ class ClosedTrack:
 
         if kind == "polyline":
             return cls(np.asarray(data["centerline"], dtype=float), width=width, name=name)
+        if kind == "catmull_rom":
+            centerline = catmull_rom_closed_centerline(
+                control_points=np.asarray(data["control_points"], dtype=float),
+                samples_per_segment=int(data.get("samples_per_segment", 24)),
+                alpha=float(data.get("alpha", 0.5)),
+            )
+            return cls(centerline, width=width, name=name)
         if kind == "rounded_rectangle":
             centerline = rounded_rectangle_centerline(
                 length=float(data["length"]),
@@ -210,3 +217,75 @@ def rounded_rectangle_centerline(
             points.append(centers[next_corner] + radius * np.array([np.cos(angle), np.sin(angle)]))
 
     return np.asarray(points, dtype=float)
+
+
+def catmull_rom_closed_centerline(
+    control_points: np.ndarray,
+    samples_per_segment: int = 24,
+    alpha: float = 0.5,
+) -> np.ndarray:
+    """Generate a closed centripetal Catmull-Rom spline through control points."""
+    points = np.asarray(control_points, dtype=float)
+    if points.ndim != 2 or points.shape[1] != 2:
+        raise ValueError("control_points must have shape (N, 2).")
+    if len(points) < 4:
+        raise ValueError("Catmull-Rom tracks need at least 4 control points.")
+    if samples_per_segment < 2:
+        raise ValueError("samples_per_segment must be at least 2.")
+    if alpha <= 0:
+        raise ValueError("alpha must be positive.")
+    if np.allclose(points[0], points[-1]):
+        points = points[:-1]
+
+    samples: list[np.ndarray] = []
+    for index in range(len(points)):
+        p0 = points[(index - 1) % len(points)]
+        p1 = points[index]
+        p2 = points[(index + 1) % len(points)]
+        p3 = points[(index + 2) % len(points)]
+        samples.extend(
+            centripetal_catmull_rom_segment(
+                p0,
+                p1,
+                p2,
+                p3,
+                samples=samples_per_segment,
+                alpha=alpha,
+            )
+        )
+    return np.asarray(samples, dtype=float)
+
+
+def centripetal_catmull_rom_segment(
+    p0: np.ndarray,
+    p1: np.ndarray,
+    p2: np.ndarray,
+    p3: np.ndarray,
+    samples: int,
+    alpha: float,
+) -> list[np.ndarray]:
+    def tj(ti: float, pa: np.ndarray, pb: np.ndarray) -> float:
+        distance = float(np.linalg.norm(pb - pa))
+        return ti + max(distance, 1e-9) ** alpha
+
+    t0 = 0.0
+    t1 = tj(t0, p0, p1)
+    t2 = tj(t1, p1, p2)
+    t3 = tj(t2, p2, p3)
+
+    segment_points = []
+    for t in np.linspace(t1, t2, samples, endpoint=False):
+        a1 = interpolate(p0, p1, t0, t1, t)
+        a2 = interpolate(p1, p2, t1, t2, t)
+        a3 = interpolate(p2, p3, t2, t3, t)
+        b1 = interpolate(a1, a2, t0, t2, t)
+        b2 = interpolate(a2, a3, t1, t3, t)
+        c = interpolate(b1, b2, t1, t2, t)
+        segment_points.append(c)
+    return segment_points
+
+
+def interpolate(pa: np.ndarray, pb: np.ndarray, ta: float, tb: float, t: float) -> np.ndarray:
+    if abs(tb - ta) <= 1e-12:
+        return pa.copy()
+    return ((tb - t) / (tb - ta)) * pa + ((t - ta) / (tb - ta)) * pb

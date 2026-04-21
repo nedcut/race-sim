@@ -1,0 +1,31 @@
+tracks:
+  oval:
+    env: configs/env.yaml
+    track: configs/tracks/oval.yaml
+  s_curve:
+    env: configs/env_s_curve.yaml
+    track: configs/tracks/s_curve.yaml
+  kidney:
+    env: configs/env_kidney.yaml
+    track: configs/tracks/kidney.yaml
+  chicane:
+    env: configs/env_chicane.yaml
+    track: configs/tracks/chicane.yaml
+  hairpin:
+    env: configs/env_hairpin.yaml
+    track: configs/tracks/hairpin.yaml
+  sweepers:
+    env: configs/env_sweepers.yaml
+    track: configs/tracks/sweepers.yaml
+  stop_go:
+    env: configs/env_stop_go.yaml
+    track: configs/tracks/stop_go.yaml
+  club:
+    env: configs/env_club.yaml
+    track: configs/tracks/club.yaml
+  mini_monaco:
+    env: configs/env_mini_monaco.yaml
+    track: configs/tracks/mini_monaco.yaml
+  technical:
+    env: configs/env_technical.yaml
+    track: configs/tracks/technical.yaml

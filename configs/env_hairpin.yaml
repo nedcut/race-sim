@@ -1,11 +1,11 @@
-track: configs/tracks/oval.yaml
+track: configs/tracks/hairpin.yaml
 simulation:
   dt: 0.02
   frame_skip: 4
   max_episode_steps: 3000
   initial_speed: 2.0
 model:
-  xml: assets/mjcf/world.xml
+  xml: assets/mjcf/world_hairpin.xml
 control:
   drivetrain: rwd
   max_steer_angle: 0.45
@@ -25,6 +25,11 @@ control:
   center_of_mass_to_rear: 0.67
 termination:
   off_track_margin: 0.5
+reward:
+  progress: 1.0
+  lateral_error: 0.05
+  heading_error: 0.02
+  off_track: 25.0
 reset_randomization:
   enabled: false
   progress: true
@@ -32,8 +37,3 @@ reset_randomization:
   heading_error: 0.25
   speed_min: 1.0
   speed_max: 4.0
-reward:
-  progress: 1.0
-  lateral_error: 0.05
-  heading_error: 0.02
-  off_track: 25.0

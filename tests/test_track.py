@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 
-from racesim.env.track import ClosedTrack
+from racesim.env.track import ClosedTrack, catmull_rom_closed_centerline
 
 
 def square_track() -> ClosedTrack:
@@ -73,3 +73,21 @@ def test_sample_at_wraps_progress() -> None:
     np.testing.assert_allclose(point, np.array([1.0, 0.0]))
     np.testing.assert_allclose(tangent, np.array([1.0, 0.0]))
     np.testing.assert_allclose(normal, np.array([0.0, 1.0]))
+
+
+def test_catmull_rom_closed_centerline_samples_smooth_closed_track() -> None:
+    centerline = catmull_rom_closed_centerline(
+        np.array(
+            [
+                [10.0, 0.0],
+                [0.0, 8.0],
+                [-10.0, 0.0],
+                [0.0, -8.0],
+            ]
+        ),
+        samples_per_segment=8,
+    )
+    track = ClosedTrack(centerline, width=4.0)
+
+    assert centerline.shape == (32, 2)
+    assert track.length > 40.0
