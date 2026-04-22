@@ -431,7 +431,9 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             float(abs(projection.lateral_error) > self.track.half_width),
         ]
         features.extend(self._boundary_margin_features(projection.lateral_error))
-        features.append(self._target_speed(projection.progress) / self.reward_config.target_speed_max)
+        features.append(
+            self._target_speed(projection.progress) / self.reward_config.target_speed_max
+        )
         features.extend(self._lookahead_features(projection.progress, yaw))
         return np.asarray(features, dtype=np.float32)
 
