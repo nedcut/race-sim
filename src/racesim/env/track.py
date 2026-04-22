@@ -25,6 +25,16 @@ class TrackProjection:
     heading_error: float | None = None
 
 
+@dataclass(frozen=True)
+class TrackGeometryIssue:
+    """A geometric problem detected in generated track curves."""
+
+    curve: str
+    segment_index: int
+    other_segment_index: int
+    message: str
+
+
 class ClosedTrack:
     """Sampled closed centerline with progress and lateral-error queries.
 
@@ -163,6 +173,28 @@ class ClosedTrack:
         right = self.centerline - self.half_width * point_normals
         return left, right
 
+    def validate_geometry(self, *, include_borders: bool = True) -> list[TrackGeometryIssue]:
+        """Return self-intersection issues in centerline and generated borders."""
+        curves = [("centerline", self.centerline)]
+        if include_borders:
+            left, right = self.boundaries()
+            curves.extend([("left_border", left), ("right_border", right)])
+
+        issues: list[TrackGeometryIssue] = []
+        for curve_name, points in curves:
+            for index, other_index in polyline_self_intersections(points):
+                issues.append(
+                    TrackGeometryIssue(
+                        curve=curve_name,
+                        segment_index=index,
+                        other_segment_index=other_index,
+                        message=(
+                            f"{curve_name} segments {index} and {other_index} intersect"
+                        ),
+                    )
+                )
+        return issues
+
     def _vertex_normals(self) -> np.ndarray:
         previous_tangents = np.roll(self.tangents, shift=1, axis=0)
         averaged = rotate_left(normalize_vectors(previous_tangents + self.tangents))
@@ -289,3 +321,80 @@ def interpolate(pa: np.ndarray, pb: np.ndarray, ta: float, tb: float, t: float) 
     if abs(tb - ta) <= 1e-12:
         return pa.copy()
     return ((tb - t) / (tb - ta)) * pa + ((t - ta) / (tb - ta)) * pb
+
+
+def polyline_self_intersections(points: np.ndarray) -> list[tuple[int, int]]:
+    """Return non-adjacent segment pairs that intersect in a closed polyline."""
+    points = np.asarray(points, dtype=float)
+    if points.ndim != 2 or points.shape[1] != 2:
+        raise ValueError("points must have shape (N, 2).")
+    if len(points) < 3:
+        raise ValueError("points must contain at least 3 points.")
+
+    intersections: list[tuple[int, int]] = []
+    segment_count = len(points)
+    for index in range(segment_count):
+        start = points[index]
+        end = points[(index + 1) % segment_count]
+        for other_index in range(index + 1, segment_count):
+            if _segments_are_adjacent(index, other_index, segment_count):
+                continue
+            other_start = points[other_index]
+            other_end = points[(other_index + 1) % segment_count]
+            if segments_intersect(start, end, other_start, other_end):
+                intersections.append((index, other_index))
+    return intersections
+
+
+def _segments_are_adjacent(index: int, other_index: int, segment_count: int) -> bool:
+    return (
+        index == other_index
+        or (index + 1) % segment_count == other_index
+        or (other_index + 1) % segment_count == index
+    )
+
+
+def segments_intersect(
+    first_start: np.ndarray,
+    first_end: np.ndarray,
+    second_start: np.ndarray,
+    second_end: np.ndarray,
+) -> bool:
+    first_start = np.asarray(first_start, dtype=float)
+    first_end = np.asarray(first_end, dtype=float)
+    second_start = np.asarray(second_start, dtype=float)
+    second_end = np.asarray(second_end, dtype=float)
+
+    first_orientation = _orientation(first_start, first_end, second_start)
+    second_orientation = _orientation(first_start, first_end, second_end)
+    third_orientation = _orientation(second_start, second_end, first_start)
+    fourth_orientation = _orientation(second_start, second_end, first_end)
+
+    if (
+        first_orientation * second_orientation < -1e-9
+        and third_orientation * fourth_orientation < -1e-9
+    ):
+        return True
+    if abs(first_orientation) <= 1e-9 and _point_on_segment(first_start, first_end, second_start):
+        return True
+    if abs(second_orientation) <= 1e-9 and _point_on_segment(first_start, first_end, second_end):
+        return True
+    if abs(third_orientation) <= 1e-9 and _point_on_segment(second_start, second_end, first_start):
+        return True
+    return bool(
+        abs(fourth_orientation) <= 1e-9
+        and _point_on_segment(second_start, second_end, first_end)
+    )
+
+
+def _orientation(start: np.ndarray, end: np.ndarray, point: np.ndarray) -> float:
+    vector = end - start
+    relative = point - start
+    return float(vector[0] * relative[1] - vector[1] * relative[0])
+
+
+def _point_on_segment(start: np.ndarray, end: np.ndarray, point: np.ndarray) -> bool:
+    return bool(
+        min(start[0], end[0]) - 1e-9 <= point[0] <= max(start[0], end[0]) + 1e-9
+        and min(start[1], end[1]) - 1e-9 <= point[1] <= max(start[1], end[1]) + 1e-9
+    )

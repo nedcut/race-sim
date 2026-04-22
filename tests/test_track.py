@@ -5,7 +5,11 @@ import math
 import numpy as np
 import pytest
 
-from racesim.env.track import ClosedTrack, catmull_rom_closed_centerline
+from racesim.env.track import (
+    ClosedTrack,
+    catmull_rom_closed_centerline,
+    polyline_self_intersections,
+)
 
 
 def square_track() -> ClosedTrack:
@@ -91,3 +95,34 @@ def test_catmull_rom_closed_centerline_samples_smooth_closed_track() -> None:
 
     assert centerline.shape == (32, 2)
     assert track.length > 40.0
+
+
+def test_polyline_self_intersections_detects_crossing_segments() -> None:
+    points = np.array(
+        [
+            [0.0, 0.0],
+            [2.0, 2.0],
+            [0.0, 2.0],
+            [2.0, 0.0],
+        ]
+    )
+
+    assert polyline_self_intersections(points) == [(0, 2)]
+
+
+def test_track_geometry_validation_reports_crossed_centerline() -> None:
+    track = ClosedTrack(
+        centerline=np.array(
+            [
+                [0.0, 0.0],
+                [2.0, 2.0],
+                [0.0, 2.0],
+                [2.0, 0.0],
+            ]
+        ),
+        width=0.5,
+    )
+
+    issues = track.validate_geometry(include_borders=False)
+
+    assert [issue.curve for issue in issues] == ["centerline"]

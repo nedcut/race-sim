@@ -18,10 +18,15 @@ def catalog() -> dict:
 def test_track_catalog_tracks_have_sane_geometry() -> None:
     for name, entry in catalog().items():
         track = ClosedTrack.from_config(entry["track"])
+        geometry_issues = track.validate_geometry()
 
         assert track.name == name
         assert track.length > 80.0
         assert track.width > 0.0
+        assert not geometry_issues, (
+            f"{name} has invalid geometry: "
+            + ", ".join(issue.message for issue in geometry_issues)
+        )
 
 
 def test_track_catalog_envs_and_worlds_load() -> None:
