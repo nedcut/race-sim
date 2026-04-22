@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from racesim.eval.evaluate_policy import evaluate_policy_model
+from racesim.training.live_eval import best_score
 from racesim.training.live_dashboard import LiveDashboard
 from racesim.training.train_ppo import load_train_config, make_training_env
 
@@ -34,6 +35,51 @@ def test_staged_progress_config_builds_curriculum_env() -> None:
     np.testing.assert_allclose(env.probabilities.sum(), 1.0)
 
 
+def test_nominal_beefy_config_forces_grip_one() -> None:
+    config = load_train_config(Path("configs/train_ppo_nominal_beefy_1m.yaml"))
+    env = make_training_env(config)
+
+    _observation, info = env.reset(seed=0)
+
+    assert info["grip_scale"] == 1.0
+    assert config["ppo"]["policy_kwargs"]["net_arch"]["pi"] == [256, 256, 128]
+    assert config["env"]["n_envs"] == 4
+    assert config["env"]["vec_env"] == "subproc"
+    assert config["eval"]["save_best"] is True
+
+
+def test_blind_grip_config_uses_tight_grip_window() -> None:
+    config = load_train_config(Path("configs/train_ppo_blind_grip_095_105_beefy_1m.yaml"))
+    env = make_training_env(config)
+
+    _observation, info = env.reset(seed=0)
+
+    assert 0.95 <= info["grip_scale"] <= 1.05
+    assert "grip_scale" not in env.reset_options
+    assert config["env"]["n_envs"] == 4
+
+
+def test_best_score_prefers_completion_then_lap_time_then_reward() -> None:
+    incomplete = {
+        "completion_rate": 0.0,
+        "mean_completed_lap_time": None,
+        "mean_reward": 500.0,
+    }
+    slower_complete = {
+        "completion_rate": 1.0,
+        "mean_completed_lap_time": 42.0,
+        "mean_reward": 200.0,
+    }
+    faster_complete = {
+        "completion_rate": 1.0,
+        "mean_completed_lap_time": 40.0,
+        "mean_reward": 180.0,
+    }
+
+    assert best_score(slower_complete) > best_score(incomplete)
+    assert best_score(faster_complete) > best_score(slower_complete)
+
+
 def test_evaluate_policy_model_with_dummy_policy() -> None:
     result = evaluate_policy_model(
         model=DummyPolicy(),
@@ -43,9 +89,11 @@ def test_evaluate_policy_model_with_dummy_policy() -> None:
         lap_target=1.0,
         deterministic=True,
         record_trajectory=True,
+        reset_options={"grip_scale": 0.95},
     )
 
     assert result["controller"] == "ppo"
+    assert result["reset_options"]["grip_scale"] == 0.95
     assert len(result["episodes"][0]["trajectory"]) == 2
 
 

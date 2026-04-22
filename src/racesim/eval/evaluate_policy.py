@@ -4,6 +4,7 @@ import argparse
 import json
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -21,6 +22,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lap-target", type=float, default=1.0)
     parser.add_argument("--deterministic", action="store_true")
     parser.add_argument("--record-trajectory", action="store_true")
+    parser.add_argument("--grip-scale", type=float, default=None)
+    parser.add_argument("--randomize-reset", action="store_true")
     parser.add_argument("--output", type=Path, default=Path("results/eval_policy.json"))
     return parser.parse_args()
 
@@ -38,6 +41,7 @@ def main() -> None:
         lap_target=args.lap_target,
         deterministic=args.deterministic,
         record_trajectory=args.record_trajectory,
+        reset_options=reset_options(args),
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2), encoding="utf-8")
@@ -53,13 +57,14 @@ def evaluate_policy_model(
     lap_target: float,
     deterministic: bool,
     record_trajectory: bool,
+    reset_options: dict[str, Any] | None = None,
 ) -> dict:
     env = RacingEnv(config_path)
     env.max_episode_steps = max_steps
     env.lap_target = lap_target
     results = []
     for episode in range(episodes):
-        observation, info = env.reset(seed=episode)
+        observation, info = env.reset(seed=episode, options=reset_options)
         total_reward = 0.0
         trajectory = []
         steps = 0
@@ -99,6 +104,7 @@ def evaluate_policy_model(
     return {
         "controller": "ppo",
         "config": str(config_path),
+        "reset_options": reset_options or {},
         "summary": summarize_episodes([result["metrics"] for result in results]),
         "episodes": [
             {
@@ -110,6 +116,15 @@ def evaluate_policy_model(
             for result in results
         ],
     }
+
+
+def reset_options(args: argparse.Namespace) -> dict[str, Any] | None:
+    options: dict[str, Any] = {}
+    if args.grip_scale is not None:
+        options["grip_scale"] = args.grip_scale
+    if args.randomize_reset:
+        options["randomize"] = True
+    return options or None
 
 
 if __name__ == "__main__":

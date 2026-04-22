@@ -48,10 +48,10 @@ def main() -> None:
     from stable_baselines3 import PPO
     from stable_baselines3.common.callbacks import CallbackList
     from stable_baselines3.common.monitor import Monitor
-    from stable_baselines3.common.vec_env import DummyVecEnv
+    from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
     seed = int(config.get("seed", 0))
-    vec_env = DummyVecEnv([lambda: Monitor(make_training_env(config))])
+    vec_env = make_vec_env(config, Monitor, DummyVecEnv, SubprocVecEnv)
 
     ppo_config = dict(config.get("ppo", {}))
     policy = ppo_config.pop("policy", "MlpPolicy")
@@ -63,6 +63,7 @@ def main() -> None:
         tensorboard_log=str(output_dir),
         **ppo_config,
     )
+    print(f"PPO device: {model.device}")
 
     callbacks = []
     stage_config = config.get("curriculum", {}).get("stages", [])
@@ -80,6 +81,9 @@ def main() -> None:
                 max_steps=int(eval_config.get("max_steps", 1500)),
                 deterministic=bool(eval_config.get("deterministic", True)),
                 enabled=bool(live_config.get("enabled", True)),
+                best_model_path=output_dir / "best_model"
+                if bool(eval_config.get("save_best", True))
+                else None,
             )
         )
 
@@ -107,7 +111,36 @@ def make_training_env(config: dict[str, Any]) -> TrackCurriculumEnv:
         lap_target=env_config.get("lap_target"),
         max_episode_steps=env_config.get("max_episode_steps"),
         probabilities=env_config.get("probabilities"),
+        reset_options=env_config.get("reset_options"),
+        reset_option_ranges=env_config.get("reset_option_ranges"),
     )
+
+
+def make_vec_env(
+    config: dict[str, Any],
+    monitor_cls: type,
+    dummy_vec_env_cls: type,
+    subproc_vec_env_cls: type,
+) -> Any:
+    env_config = config.get("env", {})
+    n_envs = int(env_config.get("n_envs", 1))
+    vec_env_type = str(env_config.get("vec_env", "dummy")).lower()
+
+    def make_env(rank: int) -> Any:
+        def _init() -> Any:
+            env = make_training_env(config)
+            env.reset(seed=int(config.get("seed", 0)) + rank)
+            return monitor_cls(env)
+
+        return _init
+
+    env_fns = [make_env(index) for index in range(n_envs)]
+    if vec_env_type == "dummy":
+        return dummy_vec_env_cls(env_fns)
+    if vec_env_type == "subproc":
+        start_method = env_config.get("start_method", "forkserver")
+        return subproc_vec_env_cls(env_fns, start_method=start_method)
+    raise ValueError(f"Unsupported vec_env type: {vec_env_type}")
 
 
 class CurriculumStageCallback(BaseCallback):

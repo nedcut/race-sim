@@ -21,6 +21,8 @@ class TrackCurriculumEnv(gym.Env[np.ndarray, np.ndarray]):
         lap_target: float | None = None,
         max_episode_steps: int | None = None,
         probabilities: list[float] | None = None,
+        reset_options: dict[str, Any] | None = None,
+        reset_option_ranges: dict[str, tuple[float, float] | list[float]] | None = None,
     ) -> None:
         super().__init__()
         if not env_configs:
@@ -29,6 +31,8 @@ class TrackCurriculumEnv(gym.Env[np.ndarray, np.ndarray]):
         self.envs = [RacingEnv(path) for path in env_configs]
         self.env_configs = [str(path) for path in env_configs]
         self.randomize_reset = randomize_reset
+        self.reset_options = dict(reset_options or {})
+        self.reset_option_ranges = dict(reset_option_ranges or {})
         self.current_index = 0
         self.current_env = self.envs[self.current_index]
 
@@ -55,6 +59,8 @@ class TrackCurriculumEnv(gym.Env[np.ndarray, np.ndarray]):
 
         reset_options = dict(options or {})
         reset_options.setdefault("randomize", self.randomize_reset)
+        reset_options.update(self.reset_options)
+        reset_options.update(self._sample_reset_options())
         observation, info = self.current_env.reset(seed=seed, options=reset_options)
         return observation, self._annotate_info(info)
 
@@ -71,6 +77,17 @@ class TrackCurriculumEnv(gym.Env[np.ndarray, np.ndarray]):
         annotated["env_config"] = self.env_configs[self.current_index]
         annotated["track_name"] = self.current_env.track.name
         return annotated
+
+    def _sample_reset_options(self) -> dict[str, float]:
+        sampled: dict[str, float] = {}
+        for key, value_range in self.reset_option_ranges.items():
+            if len(value_range) != 2:
+                raise ValueError(f"Reset option range for {key!r} must have two values.")
+            low, high = float(value_range[0]), float(value_range[1])
+            if high < low:
+                raise ValueError(f"Reset option range for {key!r} must be ordered low to high.")
+            sampled[key] = float(self.np_random.uniform(low, high))
+        return sampled
 
 
 def normalize_probabilities(probabilities: list[float] | None, size: int) -> np.ndarray | None:

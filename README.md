@@ -63,6 +63,19 @@ Available training configs:
 - `configs/train_ppo_oval.yaml`
 - `configs/train_ppo_easy.yaml`
 - `configs/train_ppo_curriculum.yaml`
+- `configs/train_ppo_staged_progress_1m.yaml`
+- `configs/train_ppo_nominal_beefy_1m.yaml`
+- `configs/train_ppo_blind_grip_095_105_beefy_1m.yaml`
+
+The staged-progress 1M config uses Stable-Baselines3's default `MlpPolicy`
+network: separate actor and critic MLPs with `[64, 64]` hidden layers and Tanh
+activations. The nominal and blind-grip configs use larger separate actor and
+critic networks with `[256, 256, 128]` hidden layers and request `device: mps`
+for Apple Silicon training. They use four subprocess environments and save both
+`final_model.zip` and the best live-eval checkpoint as `best_model.zip`. The
+blind-grip config samples `grip_scale` uniformly from `0.95` to `1.05` at reset,
+but does not add grip to the observation, so the policy must infer grip from
+vehicle behavior.
 
 ## Analysis Outputs
 

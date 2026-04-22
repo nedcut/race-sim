@@ -1,0 +1,72 @@
+seed: 6
+total_timesteps: 1000000
+output_dir: results/ppo_blind_grip_095_105_beefy_1m
+env:
+  env_configs:
+    - configs/env.yaml
+    - configs/env_s_curve.yaml
+    - configs/env_sweepers.yaml
+    - configs/env_stop_go.yaml
+    - configs/env_hairpin.yaml
+  probabilities:
+    - 0.3
+    - 0.25
+    - 0.25
+    - 0.1
+    - 0.1
+  randomize_reset: true
+  reset_option_ranges:
+    grip_scale:
+      - 0.95
+      - 1.05
+  n_envs: 4
+  vec_env: subproc
+  start_method: forkserver
+  lap_target: 1.0
+  max_episode_steps: 2200
+curriculum:
+  stages:
+    - at_timesteps: 250000
+      probabilities:
+        - 0.18
+        - 0.22
+        - 0.18
+        - 0.25
+        - 0.17
+    - at_timesteps: 600000
+      probabilities:
+        - 0.1
+        - 0.15
+        - 0.12
+        - 0.38
+        - 0.25
+ppo:
+  policy: MlpPolicy
+  device: mps
+  n_steps: 2048
+  batch_size: 512
+  learning_rate: 0.0002
+  gamma: 0.995
+  gae_lambda: 0.95
+  ent_coef: 0.005
+  clip_range: 0.2
+  policy_kwargs:
+    net_arch:
+      pi:
+        - 256
+        - 256
+        - 128
+      vf:
+        - 256
+        - 256
+        - 128
+eval:
+  env_config: configs/env_stop_go.yaml
+  frequency: 25000
+  episodes: 3
+  max_steps: 2200
+  deterministic: true
+  save_best: true
+live:
+  enabled: true
+  directory: results/ppo_blind_grip_095_105_beefy_1m/live
