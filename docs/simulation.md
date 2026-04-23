@@ -5,19 +5,23 @@ This project currently uses a simplified MuJoCo vehicle model. The car is a free
 - front steering angle from the steering action
 - front/rear lateral tire-force proxies from slip angles
 - configurable drivetrain split: `rwd`, `fwd`, or `awd`
-- throttle and brake longitudinal forces
+- throttle, brake, and brake-bias longitudinal forces
+- load transfer from longitudinal acceleration
+- configurable tire grip, combined tire-force limiting, and reported tire usage
+- optional aero downforce with front/rear balance
 - drag, rolling resistance, yaw damping, and action smoothing
 
 That means the current car is useful for testing the environment loop, reward, progress metric, heuristic baseline, and evaluation tooling. It should feel more car-like than raw yaw torque, but it is not yet a full wheel/contact tire model.
 
-The default MuJoCo world now includes an oval track surface, red boundaries, and centerline markers so the native viewer matches the Python-side track geometry used for reward and evaluation.
+Each catalog track has a matching MuJoCo world with track surface, boundaries, and centerline markers so the native viewer matches the Python-side track geometry used for reward and evaluation.
 
 ## What Is Worth Trusting Now
 
 - Track-relative progress, lateral error, heading error, and lap completion.
 - Whether a controller can follow the track without leaving it.
-- Coarse behavior under different force, damping, drivetrain, and grip-like parameters.
-- Baseline-vs-learned evaluation plumbing once RL is added.
+- Coarse behavior under different force, damping, drivetrain, grip, brake-bias, and aero parameters.
+- Baseline-vs-learned evaluation plumbing.
+- Deterministic open-loop regression telemetry from `racesim-physics-benchmarks`.
 
 ## What Is Not Worth Claiming Yet
 
@@ -33,6 +37,18 @@ Run a deterministic baseline evaluation:
 
 ```bash
 racesim-evaluate --controller heuristic --episodes 5
+```
+
+Run catalog geometry validation:
+
+```bash
+racesim-validate-tracks
+```
+
+Run open-loop physics telemetry:
+
+```bash
+racesim-physics-benchmarks
 ```
 
 Render a top-down rollout:

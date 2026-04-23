@@ -6,14 +6,15 @@ This repository studies continuous control for autonomous racing in a simplified
 
 - Python package scaffold
 - Closed-track representation
-- Oval and technical track configs
-- Unit tests for progress, lateral error, heading error, and off-track checks
-- Track plotting script
+- 14 track configs with matching MuJoCo visual worlds
+- Unit tests for track geometry, reset randomization, vehicle dynamics, evaluation tools, and training helpers
+- Track plotting, validation, rollout rendering, comparison, and smoke-test scripts
 - Minimal MuJoCo/Gymnasium environment with continuous steering/throttle/brake actions
-- Bicycle-style vehicle dynamics with front steering, drivetrain split, tire-force proxies, and action smoothing
-- Centerline and racing-line heuristic baselines that complete the oval track
-- Track catalog with spline-based layouts for curriculum/generalization
-- Reset randomization for progress, lateral offset, heading error, and initial speed
+- Bicycle-style vehicle dynamics with front steering, drivetrain split, load transfer, combined tire-force limits, brake bias, aero downforce, and action smoothing
+- Vehicle presets for touring, kart, and formula-style setups
+- Centerline and racing-line heuristic baselines for smoke testing
+- Track catalog with spline-based layouts for curriculum/generalization, plus harder held-out layouts
+- Reset randomization for progress, lateral offset, heading error, initial speed, and grip
 
 ## Quick Start
 
@@ -22,6 +23,8 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
+ruff check .
+racesim-validate-tracks
 racesim-plot-track --config configs/tracks/oval.yaml --output results/oval_track.png
 racesim-smoke-mujoco
 racesim-rollout --controller heuristic --steps 1800
@@ -33,6 +36,7 @@ racesim-evaluate --controller racing_line --episodes 1 --record-trajectory --out
 racesim-compare-rollouts --input results/eval_centerline_trajectory.json results/eval_racing_line_trajectory.json --output-dir results/comparison
 racesim-sweep-vehicle --episodes 3
 racesim-smoke-tracks --controller racing_line --steps 1200 --output results/track_smoke.csv
+racesim-physics-benchmarks --output results/physics_benchmarks.json
 racesim-render-rollout --controller heuristic --steps 1800
 racesim-make-track-visual --track configs/tracks/technical.yaml --output assets/mjcf/technical_track.xml --model-name technical_track_visuals
 racesim-keyboard-drive
@@ -88,20 +92,22 @@ The rollout plotting command produces:
 
 The vehicle sweep compares `rwd`, `fwd`, and `awd` under low/nominal/high grip scales and writes CSV/JSON summaries to `results/`.
 
-The comparison plotting command overlays recorded controller trajectories and writes a compact summary table. The technical track config/world are available through `configs/env_technical.yaml`; the current heuristics do not complete it reliably yet, which makes it a useful held-out challenge.
+The physics benchmark command runs deterministic open-loop acceleration, braking, steady-turning, and repeatability checks. These are telemetry baselines rather than claims of real vehicle fidelity.
 
-The track catalog lives in [configs/track_catalog.yaml](configs/track_catalog.yaml). Use `racesim-smoke-tracks` to quickly see which tracks are easy, intermediate, or failure cases for a controller.
+The comparison plotting command overlays recorded controller trajectories and writes a compact summary table. The technical, street-circuit, grand-prix, kartplex, and endurance layouts are useful held-out challenge cases for controllers and learned policies.
+
+The track catalog lives in [configs/track_catalog.yaml](configs/track_catalog.yaml). Use `racesim-smoke-tracks` to quickly see which tracks are easy, intermediate, or failure cases for a controller. At a 1200-step racing-line smoke horizon, most shorter tracks complete, while larger layouts such as grand prix and endurance usually need longer horizons or a stronger policy.
 
 ## Inspecting The Simulator
 
-The current car is a simplified direct-force/yaw MuJoCo body, not yet a tire/contact model. See [docs/simulation.md](docs/simulation.md) for what is worth trusting now, what is intentionally simplified, and how to manually drive or render rollouts.
+The current car is still a simplified free-body MuJoCo model, not a wheel/contact tire simulation. The environment applies forces from a bicycle-style tire proxy with axle loads, combined tire limits, and vehicle presets. See [docs/simulation.md](docs/simulation.md) for what is worth trusting now, what is intentionally simplified, and how to manually drive or render rollouts.
 
 On macOS, the keyboard viewer uses MuJoCo's `mjpython`; `racesim-keyboard-drive` will relaunch itself with it when available. Driving uses `I/K`, `J/U`, and `F/G` instead of WASD because MuJoCo reserves WASD for built-in viewer shortcuts. The default camera is a dynamic chase camera behind the car.
 
 ## Near-Term Build Order
 
-1. Validate track math with tests and plots.
-2. Add the simplest MuJoCo car scene.
-3. Wrap simulator in a Gymnasium-style environment.
-4. Implement the heuristic controller before RL.
-5. Add PPO training only after the baseline completes laps.
+1. Keep the track catalog and MuJoCo visual worlds validated together.
+2. Treat physics benchmarks as regression telemetry while tuning the simplified tire model.
+3. Improve controller coverage on the hard catalog tracks before expanding curricula further.
+4. Re-run policy evaluation after physics or reward changes so old PPO artifacts do not become misleading.
+5. Add richer tire/contact modeling only after the current proxy is well characterized.
