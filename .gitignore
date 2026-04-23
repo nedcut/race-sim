@@ -9,4 +9,5 @@ build/
 *.egg-info/
 results/*
 !results/.gitkeep
+!results/baselines.md
 notebooks/.ipynb_checkpoints/

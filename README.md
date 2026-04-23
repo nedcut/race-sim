@@ -37,6 +37,7 @@ racesim-compare-rollouts --input results/eval_centerline_trajectory.json results
 racesim-sweep-vehicle --episodes 3
 racesim-smoke-tracks --controller racing_line --steps 1200 --output results/track_smoke.csv
 racesim-physics-benchmarks --output results/physics_benchmarks.json
+racesim-eval-suite --output results/baselines.md
 racesim-render-rollout --controller heuristic --steps 1800
 racesim-make-track-visual --track configs/tracks/technical.yaml --output assets/mjcf/technical_track.xml --model-name technical_track_visuals
 racesim-keyboard-drive
@@ -93,6 +94,8 @@ The rollout plotting command produces:
 The vehicle sweep compares `rwd`, `fwd`, and `awd` under low/nominal/high grip scales and writes CSV/JSON summaries to `results/`.
 
 The physics benchmark command runs deterministic open-loop acceleration, braking, steady-turning, and repeatability checks. These are telemetry baselines rather than claims of real vehicle fidelity.
+
+The eval suite command runs tests, lint, catalog validation, controller smoke tests, default controller evals, physics telemetry, and the saved PPO policy matrix when the model artifact is present. It writes the tracked baseline report at [results/baselines.md](results/baselines.md).
 
 The comparison plotting command overlays recorded controller trajectories and writes a compact summary table. The technical, street-circuit, grand-prix, kartplex, and endurance layouts are useful held-out challenge cases for controllers and learned policies.
 
