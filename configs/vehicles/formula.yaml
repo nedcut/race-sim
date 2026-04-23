@@ -1,0 +1,26 @@
+name: formula
+description: High-downforce formula-ish single seater with sharp response and high grip.
+control:
+  drivetrain: rwd
+  max_steer_angle: 0.38
+  steer_rate: 6.5
+  throttle_rate: 6.0
+  brake_rate: 11.0
+  max_drive_force: 4300.0
+  max_brake_force: 2400.0
+  front_cornering_stiffness: 11500.0
+  rear_cornering_stiffness: 12800.0
+  max_lateral_force: 8200.0
+  yaw_damping: 260.0
+  linear_drag: 8.0
+  rolling_resistance: 10.0
+  wheelbase: 1.65
+  center_of_mass_to_front: 0.82
+  center_of_mass_to_rear: 0.83
+tire_model:
+  center_of_mass_height: 0.24
+  tire_friction_coefficient: null
+  combined_slip_exponent: 2.0
+  brake_front_bias: 0.64
+  aero_downforce_coefficient: 18.0
+  aero_front_balance: 0.48

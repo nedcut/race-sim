@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 
 from racesim.eval.evaluate_policy import evaluate_policy_model
-from racesim.training.live_eval import best_score
 from racesim.training.live_dashboard import LiveDashboard
+from racesim.training.live_eval import best_score
 from racesim.training.train_ppo import load_train_config, make_training_env
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +33,16 @@ class ControlConfig:
     wheelbase: float = 1.35
     center_of_mass_to_front: float = 0.68
     center_of_mass_to_rear: float = 0.67
+
+
+@dataclass(frozen=True)
+class TireModelConfig:
+    center_of_mass_height: float = 0.28
+    tire_friction_coefficient: float | None = None
+    combined_slip_exponent: float = 2.0
+    brake_front_bias: float = 0.6
+    aero_downforce_coefficient: float = 0.0
+    aero_front_balance: float = 0.5
 
 
 @dataclass(frozen=True)
@@ -83,9 +93,8 @@ class ResetRandomizationConfig:
 class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
     """Minimal MuJoCo racing environment.
 
-    This first environment intentionally uses direct chassis force and yaw
-    torque. It gives us a stable control loop and reward surface before we make
-    the vehicle model more physical.
+    The car is still a free body, but the applied forces come from a compact
+    bicycle-style proxy with axle loads and combined tire limits.
     """
 
     metadata = {"render_modes": []}
@@ -117,7 +126,8 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.initial_speed = float(sim_config.get("initial_speed", 0.0))
         self.lap_target = float(sim_config.get("lap_target", 1.0))
 
-        self.control = ControlConfig(**self.config.get("control", {}))
+        self.control = self._load_control_config(root)
+        self.tire_model = self._load_tire_model_config(root)
         self.reward_config = RewardConfig(**self.config.get("reward", {}))
         self.termination_config = TerminationConfig(**self.config.get("termination", {}))
         self.observation_config = ObservationConfig(**self.config.get("observation", {}))
@@ -144,8 +154,11 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.cumulative_forward_progress = 0.0
         self.smoothed_action = np.zeros(3, dtype=float)
         self.grip_scale = 1.0
+        self.last_tire_usage = {"front": 0.0, "rear": 0.0}
+        self.last_normal_loads = {"front": 0.0, "rear": 0.0}
         self.next_progress_gate = 0.0
         self.progress_history: deque[tuple[int, float]] = deque()
+        self._cached_target_speed: tuple[float, float] | None = None
 
     @staticmethod
     def _load_config(path: Path) -> dict[str, Any]:
@@ -158,6 +171,39 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         if candidate.is_absolute():
             return candidate
         return (root / candidate).resolve()
+
+    def _load_control_config(self, root: Path) -> ControlConfig:
+        control_config = {}
+        vehicle_path = self.config.get("vehicle")
+        if vehicle_path is not None:
+            vehicle_config = self._load_config(self._resolve_path(vehicle_path, root))
+            control_config.update(vehicle_config.get("control", {}))
+            control_config.update(vehicle_config.get("tire_model", {}))
+        control_config.update(self.config.get("tire_model", {}))
+        control_config.update(self.config.get("control", {}))
+        control_fields = {field.name for field in fields(ControlConfig)}
+        return ControlConfig(
+            **{key: value for key, value in control_config.items() if key in control_fields}
+        )
+
+    def _load_tire_model_config(self, root: Path) -> TireModelConfig:
+        tire_model_config = {}
+        vehicle_path = self.config.get("vehicle")
+        if vehicle_path is not None:
+            vehicle_config = self._load_config(self._resolve_path(vehicle_path, root))
+            tire_model_config.update(vehicle_config.get("tire_model", {}))
+        tire_model_config.update(self.config.get("tire_model", {}))
+        tire_model_fields = {field.name for field in fields(TireModelConfig)}
+        tire_model_config.update(
+            {
+                key: value
+                for key, value in self.config.get("control", {}).items()
+                if key in tire_model_fields
+            }
+        )
+        return TireModelConfig(
+            **{key: value for key, value in tire_model_config.items() if key in tire_model_fields}
+        )
 
     def reset(
         self,
@@ -193,10 +239,13 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.previous_progress = projection.progress
         self.cumulative_forward_progress = 0.0
         self.smoothed_action[:] = 0.0
+        self.last_tire_usage = {"front": 0.0, "rear": 0.0}
+        self.last_normal_loads = {"front": 0.0, "rear": 0.0}
         self.step_count = 0
         self.next_progress_gate = self._progress_gate_distance()
         self.progress_history.clear()
         self.progress_history.append((0, self.cumulative_forward_progress))
+        self._cached_target_speed = None
 
         observation = self._observation(projection)
         return observation, self._info(projection, reward_terms={})
@@ -289,6 +338,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         boundary_shortfall = max(self.reward_config.boundary_margin_start - boundary_margin, 0.0)
         speed = float(np.linalg.norm(self._linear_velocity()[:2]))
         target_speed = self._target_speed(projection.progress)
+        self._cached_target_speed = (projection.progress, target_speed)
         speed_excess = max(speed - target_speed, 0.0)
         reward_terms = {
             "progress": self.reward_config.progress * progress_delta,
@@ -354,42 +404,51 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         front_slip = np.arctan2(lateral_speed + lf * yaw_rate, abs(safe_speed)) - steer_angle
         rear_slip = np.arctan2(lateral_speed - lr * yaw_rate, abs(safe_speed))
 
-        front_lateral_limit = self.control.max_lateral_force * self.grip_scale
-        rear_lateral_limit = self.control.max_lateral_force * self.grip_scale
-        front_lateral_force = np.clip(
-            -self.control.front_cornering_stiffness * self.grip_scale * front_slip,
-            -front_lateral_limit,
-            front_lateral_limit,
-        )
-        rear_lateral_force = np.clip(
-            -self.control.rear_cornering_stiffness * self.grip_scale * rear_slip,
-            -rear_lateral_limit,
-            rear_lateral_limit,
-        )
-
         drive_force = throttle * self.control.max_drive_force
-        brake_force = brake * self.control.max_brake_force * np.sign(forward_speed)
+        brake_direction = np.sign(forward_speed) if abs(forward_speed) > 0.1 else 0.0
+        brake_force = brake * self.control.max_brake_force * brake_direction
         drag_force = self.control.linear_drag * forward_speed * abs(forward_speed)
-        rolling_force = self.control.rolling_resistance * np.sign(forward_speed)
-        longitudinal_force = drive_force - brake_force - drag_force - rolling_force
+        rolling_direction = np.sign(forward_speed) if abs(forward_speed) > 0.1 else 0.0
+        rolling_force = self.control.rolling_resistance * rolling_direction
 
         front_drive_fraction, rear_drive_fraction = self._drive_split()
-        front_forward_force = longitudinal_force * front_drive_fraction
-        rear_forward_force = longitudinal_force * rear_drive_fraction
+        front_brake_fraction, rear_brake_fraction = self._brake_split()
+        front_forward_force = (
+            drive_force * front_drive_fraction - brake_force * front_brake_fraction
+        )
+        rear_forward_force = drive_force * rear_drive_fraction - brake_force * rear_brake_fraction
+
+        mass = self._vehicle_mass()
+        longitudinal_acceleration = (
+            drive_force - brake_force - drag_force - rolling_force
+        ) / max(mass, 1e-9)
+        normal_loads = self._axle_normal_loads(longitudinal_acceleration, abs(forward_speed))
+        front_lateral_limit, rear_lateral_limit = self._axle_tire_limits(normal_loads)
+        front_lateral_force = -self.control.front_cornering_stiffness * self.grip_scale * front_slip
+        rear_lateral_force = -self.control.rear_cornering_stiffness * self.grip_scale * rear_slip
+        front_forward_force, front_lateral_force, front_usage = self._limit_combined_tire_force(
+            front_forward_force,
+            front_lateral_force,
+            front_lateral_limit,
+        )
+        rear_forward_force, rear_lateral_force, rear_usage = self._limit_combined_tire_force(
+            rear_forward_force,
+            rear_lateral_force,
+            rear_lateral_limit,
+        )
+        self.last_tire_usage = {"front": front_usage, "rear": rear_usage}
+        self.last_normal_loads = {"front": normal_loads[0], "rear": normal_loads[1]}
 
         front_direction = normalize_2d(
             np.cos(steer_angle) * forward + np.sin(steer_angle) * lateral
         )
-        front_lateral_direction = normalize_2d(
-            -np.sin(steer_angle) * forward + np.cos(steer_angle) * lateral
-        )
 
         front_force = (
             front_forward_force * front_direction
-            + front_lateral_force * front_lateral_direction
+            + front_lateral_force * lateral
         )
         rear_force = rear_forward_force * forward + rear_lateral_force * lateral
-        force = front_force + rear_force
+        force = front_force + rear_force - (drag_force + rolling_force) * forward
         yaw_torque = (
             lf * cross_z(forward, front_force)
             - lr * cross_z(forward, rear_force)
@@ -408,6 +467,81 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         if drivetrain == "rwd":
             return 0.0, 1.0
         raise ValueError(f"Unsupported drivetrain: {self.control.drivetrain}")
+
+    def _brake_split(self) -> tuple[float, float]:
+        front_fraction = float(np.clip(self.tire_model.brake_front_bias, 0.0, 1.0))
+        return front_fraction, 1.0 - front_fraction
+
+    def _vehicle_mass(self) -> float:
+        subtree_mass = float(self.model.body_subtreemass[self.car_body_id])
+        if subtree_mass > 0.0:
+            return subtree_mass
+        return float(max(self.model.body_mass[self.car_body_id], 1e-9))
+
+    def _axle_normal_loads(
+        self,
+        longitudinal_acceleration: float,
+        speed: float,
+    ) -> tuple[float, float]:
+        mass = self._vehicle_mass()
+        gravity = abs(float(self.model.opt.gravity[2]))
+        wheelbase = self._effective_wheelbase()
+        lf = self.control.center_of_mass_to_front
+        lr = self.control.center_of_mass_to_rear
+
+        static_front = mass * gravity * lr / wheelbase
+        static_rear = mass * gravity * lf / wheelbase
+        load_transfer = mass * longitudinal_acceleration * self.tire_model.center_of_mass_height
+        load_transfer /= wheelbase
+
+        downforce = max(self.tire_model.aero_downforce_coefficient, 0.0) * speed**2
+        front_balance = float(np.clip(self.tire_model.aero_front_balance, 0.0, 1.0))
+
+        front_load = static_front - load_transfer + downforce * front_balance
+        rear_load = static_rear + load_transfer + downforce * (1.0 - front_balance)
+        minimum_load = 0.02 * mass * gravity
+        return max(front_load, minimum_load), max(rear_load, minimum_load)
+
+    def _axle_tire_limits(self, normal_loads: tuple[float, float]) -> tuple[float, float]:
+        mu = self._tire_friction_coefficient()
+        front_load, rear_load = normal_loads
+        return mu * self.grip_scale * front_load, mu * self.grip_scale * rear_load
+
+    def _tire_friction_coefficient(self) -> float:
+        configured_mu = self.tire_model.tire_friction_coefficient
+        if configured_mu is not None and configured_mu > 0.0:
+            return configured_mu
+
+        mass = self._vehicle_mass()
+        gravity = abs(float(self.model.opt.gravity[2]))
+        total_normal_load = max(mass * gravity, 1e-9)
+        return 2.0 * self.control.max_lateral_force / total_normal_load
+
+    def _limit_combined_tire_force(
+        self,
+        longitudinal_force: float,
+        lateral_force: float,
+        force_limit: float,
+    ) -> tuple[float, float, float]:
+        if force_limit <= 1e-9:
+            return 0.0, 0.0, 0.0
+
+        exponent = max(self.tire_model.combined_slip_exponent, 1.0)
+        usage = (
+            (abs(longitudinal_force) / force_limit) ** exponent
+            + (abs(lateral_force) / force_limit) ** exponent
+        )
+        if usage <= 1.0:
+            return longitudinal_force, lateral_force, usage ** (1.0 / exponent)
+
+        scale = usage ** (-1.0 / exponent)
+        return longitudinal_force * scale, lateral_force * scale, 1.0
+
+    def _effective_wheelbase(self) -> float:
+        configured = self.control.center_of_mass_to_front + self.control.center_of_mass_to_rear
+        if configured > 1e-9:
+            return configured
+        return max(self.control.wheelbase, 1e-9)
 
     def _observation(self, projection: Any) -> np.ndarray:
         velocity = self._linear_velocity()
@@ -432,7 +566,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         ]
         features.extend(self._boundary_margin_features(projection.lateral_error))
         features.append(
-            self._target_speed(projection.progress) / self.reward_config.target_speed_max
+            self._lookup_target_speed(projection.progress) / self.reward_config.target_speed_max
         )
         features.extend(self._lookahead_features(projection.progress, yaw))
         return np.asarray(features, dtype=np.float32)
@@ -459,6 +593,14 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             )
             features.extend([heading_to_future, signed_curvature])
         return features
+
+    def _lookup_target_speed(self, progress: float) -> float:
+        if (
+            self._cached_target_speed is not None
+            and self._cached_target_speed[0] == progress
+        ):
+            return self._cached_target_speed[1]
+        return self._target_speed(progress)
 
     def _target_speed(self, progress: float) -> float:
         curvatures = self._upcoming_curvatures(progress)
@@ -552,8 +694,10 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             "smoothed_action": self.smoothed_action.copy(),
             "lateral_error": projection.lateral_error,
             "heading_error": projection.heading_error,
-            "target_speed": self._target_speed(projection.progress),
+            "target_speed": self._lookup_target_speed(projection.progress),
             "grip_scale": self.grip_scale,
+            "tire_usage": self.last_tire_usage.copy(),
+            "normal_loads": self.last_normal_loads.copy(),
             "off_track": abs(projection.lateral_error) > self.track.half_width,
             "lap_complete": self._lap_complete(),
             "no_progress_timeout": self._no_progress_timeout_info(),

@@ -6,6 +6,7 @@ simulation:
   initial_speed: 2.0
 model:
   xml: assets/mjcf/world_kidney.xml
+vehicle: configs/vehicles/touring.yaml
 control:
   drivetrain: rwd
   max_steer_angle: 0.45
