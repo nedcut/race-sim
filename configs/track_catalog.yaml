@@ -29,3 +29,15 @@ tracks:
   technical:
     env: configs/env_technical.yaml
     track: configs/tracks/technical.yaml
+  grand_prix:
+    env: configs/env_grand_prix.yaml
+    track: configs/tracks/grand_prix.yaml
+  street_circuit:
+    env: configs/env_street_circuit.yaml
+    track: configs/tracks/street_circuit.yaml
+  kartplex:
+    env: configs/env_kartplex.yaml
+    track: configs/tracks/kartplex.yaml
+  endurance:
+    env: configs/env_endurance.yaml
+    track: configs/tracks/endurance.yaml

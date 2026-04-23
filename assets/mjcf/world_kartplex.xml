@@ -1,0 +1,24 @@
+<mujoco model="racesim_kartplex_world">
+  <compiler angle="degree" autolimits="true"/>
+  <option timestep="0.02" gravity="0 0 -9.81"/>
+  <visual>
+    <global offwidth="1280" offheight="960"/>
+    <headlight ambient="0.35 0.35 0.35" diffuse="0.8 0.8 0.8"/>
+  </visual>
+
+  <include file="car.xml"/>
+  <include file="kartplex_track.xml"/>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512"
+             rgb1="0.16 0.18 0.17" rgb2="0.20 0.22 0.21"/>
+    <material name="ground" texture="grid" texrepeat="10 10" reflectance="0.05"/>
+  </asset>
+
+  <worldbody>
+    <light name="sun" pos="0 0 30" dir="0 0 -1" diffuse="1.0 1.0 1.0" ambient="0.25 0.25 0.25"/>
+    <geom name="ground" type="plane" size="80 80 0.1" material="ground"/>
+    <camera name="topdown" pos="0 0 95" xyaxes="1 0 0 0 1 0" fovy="42"/>
+    <camera name="follow" mode="trackcom" target="car" pos="-5 0 3" xyaxes="0 -1 0 0.5 0 0.866"/>
+  </worldbody>
+</mujoco>

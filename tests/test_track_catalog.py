@@ -29,6 +29,17 @@ def test_track_catalog_tracks_have_sane_geometry() -> None:
         )
 
 
+def test_track_catalog_includes_varied_new_layouts() -> None:
+    tracks = catalog()
+
+    assert {
+        "grand_prix",
+        "street_circuit",
+        "kartplex",
+        "endurance",
+    }.issubset(tracks)
+
+
 def test_track_catalog_envs_and_worlds_load() -> None:
     for entry in catalog().values():
         env = RacingEnv(entry["env"])
