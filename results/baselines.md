@@ -1,6 +1,6 @@
 # RaceSim Baselines
 
-Generated: `2026-04-23T22:12:18+00:00`
+Generated: `2026-05-21T15:29:46+00:00`
 Catalog: `configs/track_catalog.yaml`
 
 ## Quality Gates
@@ -13,8 +13,8 @@ Catalog: `configs/track_catalog.yaml`
 
 | controller | completion | off-track | mean lap time | best lap time |
 | --- | ---: | ---: | ---: | ---: |
-| racing_line | 1.00 | 0.00 | 70.40 | 70.40 |
-| heuristic | 1.00 | 0.00 | 72.40 | 72.40 |
+| racing_line | 1.00 | 0.00 | 68.08 | 68.08 |
+| heuristic | 1.00 | 0.00 | 69.44 | 69.44 |
 
 ## Catalog Smoke (5000 Steps)
 
@@ -22,39 +22,39 @@ Catalog: `configs/track_catalog.yaml`
 
 | track | status | steps | lap fraction | speed |
 | --- | --- | ---: | ---: | ---: |
-| oval | complete | 880 | 1.00 | 2.41 |
-| s_curve | complete | 1056 | 1.00 | 2.42 |
-| kidney | complete | 1209 | 1.00 | 2.40 |
-| chicane | complete | 1158 | 1.00 | 2.41 |
-| hairpin | complete | 1086 | 1.00 | 2.40 |
-| sweepers | complete | 1189 | 1.00 | 2.60 |
-| stop_go | complete | 994 | 1.00 | 2.40 |
-| club | complete | 1237 | 1.00 | 2.41 |
-| mini_monaco | complete | 1090 | 1.00 | 2.44 |
-| technical | off | 1042 | 0.96 | 2.47 |
-| grand_prix | complete | 1732 | 1.00 | 3.03 |
-| street_circuit | complete | 1523 | 1.00 | 2.40 |
-| kartplex | complete | 1106 | 1.00 | 2.41 |
-| endurance | complete | 2003 | 1.00 | 4.11 |
+| oval | complete | 851 | 1.00 | 2.41 |
+| s_curve | complete | 1032 | 1.00 | 2.42 |
+| kidney | complete | 1177 | 1.00 | 2.40 |
+| chicane | complete | 1121 | 1.00 | 2.42 |
+| hairpin | complete | 1058 | 1.00 | 2.44 |
+| sweepers | complete | 1159 | 1.00 | 2.58 |
+| stop_go | complete | 967 | 1.00 | 2.41 |
+| club | complete | 1211 | 1.00 | 2.40 |
+| mini_monaco | complete | 1063 | 1.00 | 2.44 |
+| technical | complete | 997 | 1.00 | 2.41 |
+| grand_prix | complete | 1698 | 1.00 | 3.01 |
+| street_circuit | complete | 1465 | 1.00 | 2.40 |
+| kartplex | complete | 1080 | 1.00 | 2.40 |
+| endurance | complete | 1974 | 1.00 | 4.15 |
 
 ### Heuristic
 
 | track | status | steps | lap fraction | speed |
 | --- | --- | ---: | ---: | ---: |
-| oval | complete | 905 | 1.00 | 2.42 |
-| s_curve | complete | 1103 | 1.00 | 2.41 |
-| kidney | complete | 1228 | 1.00 | 2.40 |
-| chicane | complete | 1169 | 1.00 | 2.42 |
-| hairpin | complete | 1123 | 1.00 | 2.41 |
-| sweepers | complete | 1249 | 1.00 | 2.41 |
-| stop_go | complete | 1019 | 1.00 | 2.41 |
-| club | complete | 1271 | 1.00 | 2.40 |
-| mini_monaco | complete | 1128 | 1.00 | 2.41 |
-| technical | off | 516 | 0.46 | 2.48 |
-| grand_prix | complete | 1776 | 1.00 | 2.67 |
-| street_circuit | complete | 1552 | 1.00 | 2.40 |
-| kartplex | complete | 1131 | 1.00 | 2.40 |
-| endurance | complete | 2150 | 1.00 | 3.68 |
+| oval | complete | 868 | 1.00 | 2.41 |
+| s_curve | complete | 1071 | 1.00 | 2.42 |
+| kidney | complete | 1196 | 1.00 | 2.40 |
+| chicane | complete | 1137 | 1.00 | 2.43 |
+| hairpin | complete | 1087 | 1.00 | 2.42 |
+| sweepers | complete | 1206 | 1.00 | 2.41 |
+| stop_go | complete | 990 | 1.00 | 2.40 |
+| club | complete | 1240 | 1.00 | 2.41 |
+| mini_monaco | complete | 1096 | 1.00 | 2.41 |
+| technical | complete | 1034 | 1.00 | 2.41 |
+| grand_prix | complete | 1730 | 1.00 | 2.66 |
+| street_circuit | complete | 1492 | 1.00 | 2.40 |
+| kartplex | complete | 1101 | 1.00 | 2.40 |
+| endurance | complete | 2107 | 1.00 | 3.67 |
 
 ## PPO Policy Matrix
 
@@ -62,36 +62,44 @@ Model: `results/ppo_blind_grip_095_105_beefy_1m/best_model.zip`
 
 | track | completion | off-track | mean lap time |
 | --- | ---: | ---: | ---: |
-| oval | 1.00 | 0.00 | 19.68 |
-| s_curve | 1.00 | 0.00 | 20.00 |
-| kidney | 1.00 | 0.00 | 21.28 |
-| chicane | 1.00 | 0.00 | 20.24 |
-| hairpin | 1.00 | 0.00 | 21.52 |
-| sweepers | 1.00 | 0.00 | 24.56 |
-| stop_go | 1.00 | 0.00 | 20.80 |
-| club | 1.00 | 0.00 | 22.32 |
-| mini_monaco | 1.00 | 0.00 | 20.80 |
-| technical | 0.00 | 1.00 | - |
-| grand_prix | 1.00 | 0.00 | 31.04 |
-| street_circuit | 1.00 | 0.00 | 27.36 |
-| kartplex | 0.00 | 1.00 | - |
-| endurance | 1.00 | 0.00 | 43.92 |
+| oval | 1.00 | 0.00 | 19.52 |
+| s_curve | 1.00 | 0.00 | 23.36 |
+| kidney | 1.00 | 0.00 | 24.96 |
+| chicane | 1.00 | 0.00 | 23.60 |
+| hairpin | 1.00 | 0.00 | 24.80 |
+| sweepers | 1.00 | 0.00 | 27.92 |
+| stop_go | 1.00 | 0.00 | 24.00 |
+| club | 1.00 | 0.00 | 26.16 |
+| mini_monaco | 1.00 | 0.00 | 24.24 |
+| technical | 1.00 | 0.00 | 19.04 |
+| grand_prix | 1.00 | 0.00 | 35.44 |
+| street_circuit | 1.00 | 0.00 | 30.24 |
+| kartplex | 1.00 | 0.00 | 23.12 |
+| endurance | 1.00 | 0.00 | 48.72 |
 
 ## Physics Benchmarks
 
 These are telemetry baselines, not pass/fail thresholds yet.
 
-- acceleration: final `23.32 m/s`, avg `2.43 m/s^2`, off-track `True`
-- braking: stopped `True`, distance `7.69 m`, avg decel `4.84 m/s^2`
-- steady turning: yaw rate `0.016 rad/s`, radius `717.9 m`, off-track `True`
-- repeatability: deterministic `True`, max obs delta `0.0`
+| benchmark | steps | final speed | yaw rate | tire usage | notes |
+| --- | ---: | ---: | ---: | ---: | --- |
+| acceleration | 120 | 22.47 | - | - | off-track |
+| braking | 23 | 0.14 | - | - | stopped=True |
+| steady_turning | 160 | - | 0.94 | - | off-track |
+| skidpad | 180 | 13.83 | 1.28 | 0.96 | - |
+| step_steer | 180 | 12.70 | 1.46 | 0.97 | off-track |
+| slalom | 180 | 12.35 | 0.57 | 0.91 | off-track |
+| braking_turn | 180 | 0.08 | 0.20 | 0.88 | off-track |
+| throttle_exit | 180 | 21.31 | 0.73 | 0.88 | off-track |
+| repeatability | 80 | - | - | - | deterministic=True |
+
+### Sanity Flags
+
+- none
 
 ## Failure Cases
 
-- `technical` via racing_line controller: off (reached lap 0.96)
-- `technical` via heuristic controller: off (reached lap 0.46)
-- `technical` via ppo policy: incomplete (completion 0.00, off-track 1.00)
-- `kartplex` via ppo policy: incomplete (completion 0.00, off-track 1.00)
+- none in this suite run
 
 ## Threshold Decision
 

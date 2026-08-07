@@ -72,6 +72,28 @@ def test_combined_tire_force_saturates_to_limit() -> None:
     assert np.hypot(longitudinal, lateral) <= 1000.0 + 1e-9
 
 
+def test_tire_curve_is_monotonic_until_saturation() -> None:
+    env = RacingEnv("configs/env.yaml")
+    force_limit = 2000.0
+
+    low = abs(env._tire_forces(0.0, 0.02, 7000.0, force_limit).lateral)
+    medium = abs(env._tire_forces(0.0, 0.08, 7000.0, force_limit).lateral)
+    high = abs(env._tire_forces(0.0, 0.30, 7000.0, force_limit).lateral)
+
+    assert low < medium < high <= force_limit
+
+
+def test_braking_consumes_lateral_tire_capacity() -> None:
+    env = RacingEnv("configs/env.yaml")
+    force_limit = 2000.0
+
+    corner_only = env._tire_forces(0.0, 0.20, 7000.0, force_limit)
+    braking_corner = env._tire_forces(-1800.0, 0.20, 7000.0, force_limit)
+
+    assert abs(braking_corner.lateral) < abs(corner_only.lateral)
+    assert braking_corner.usage >= corner_only.usage
+
+
 def test_step_reports_separate_bounded_tire_usage() -> None:
     env = RacingEnv("configs/env.yaml")
     env.reset(seed=0, options={"initial_speed": 8.0})
@@ -81,10 +103,41 @@ def test_step_reports_separate_bounded_tire_usage() -> None:
     )
 
     assert set(info["tire_usage"]) == {"front", "rear"}
+    assert set(info["slip_angles"]) == {"front", "rear"}
     assert 0.0 <= info["tire_usage"]["front"] <= 1.0
     assert 0.0 <= info["tire_usage"]["rear"] <= 1.0
     assert info["normal_loads"]["front"] > 0.0
     assert info["normal_loads"]["rear"] > 0.0
+    assert "yaw_torque" in info
+    assert "understeer_score" in info
+
+
+def test_off_track_info_matches_termination_margin() -> None:
+    env = RacingEnv("configs/env.yaml")
+    env.off_track_margin = 2.0
+    env.reset(seed=0)
+    # Far beyond half-width but still inside the termination margin buffer.
+    far_lateral = env.track.half_width + 1.0
+    assert not env.track.is_off_track(
+        env.track.centerline[0] + env.track.normals[0] * far_lateral,
+        margin=env.off_track_margin,
+    )
+
+
+def test_info_off_track_uses_margin() -> None:
+    env = RacingEnv("configs/env.yaml")
+    env.max_episode_steps = 20
+    env.lap_target = float("inf")
+    env.off_track_margin = 1e6
+    env.reset(seed=0, options={"initial_speed": 8.0})
+
+    for _ in range(15):
+        _observation, _reward, terminated, _truncated, info = env.step(
+            np.array([1.0, 0.5, 0.0], dtype=np.float32)
+        )
+
+    assert info["off_track"] is False
+    assert terminated is False
 
 
 def test_sustained_steering_generates_yaw_without_artificial_speed_collapse() -> None:

@@ -8,10 +8,11 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
-from racesim.controllers.factory import make_controller
+from racesim.controllers.factory import CONTROLLERS, make_controller
 from racesim.env.racing_env import RacingEnv
 
 
@@ -19,6 +20,23 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Drive the simplified MuJoCo car manually.")
     parser.add_argument("--config", type=Path, default=Path("configs/env.yaml"))
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--autopilot",
+        choices=tuple(name for name in CONTROLLERS if name != "open_loop"),
+        default="racing_line",
+        help="Built-in controller toggled by H when --policy-model is not set.",
+    )
+    parser.add_argument(
+        "--policy-model",
+        type=Path,
+        default=None,
+        help="Stable-Baselines3 PPO model zip toggled by H instead of a built-in controller.",
+    )
+    parser.add_argument(
+        "--deterministic",
+        action="store_true",
+        help="Use deterministic actions for --policy-model.",
+    )
     parser.add_argument(
         "--camera",
         choices=("chase", "topdown", "free", "fixed"),
@@ -40,7 +58,7 @@ def main() -> None:
     import mujoco.viewer
 
     env = RacingEnv(args.config)
-    controller = make_controller("centerline", env.track)
+    controller, controller_name = make_autopilot(env, args)
     observation, info = env.reset(seed=args.seed)
 
     command = np.array([0.0, 0.0, 0.0], dtype=np.float32)
@@ -83,7 +101,7 @@ def main() -> None:
 
     print(
         "Keyboard drive controls: I/K throttle up/down, J/U brake up/down, "
-        "F/G steer, T center, Space zero, H heuristic toggle, R reset, Q quit. "
+        f"F/G steer, T center, Space zero, H {controller_name} toggle, R reset, Q quit. "
         "Camera: 1 chase, 2 topdown, 3 free, 4 fixed."
     )
 
@@ -122,7 +140,7 @@ def main() -> None:
 
             now = time.monotonic()
             if now >= next_print:
-                mode = "heuristic" if state["autopilot"] else "manual"
+                mode = controller_name if state["autopilot"] else "manual"
                 print(
                     f"{mode} action={np.asarray(action).round(2)} "
                     f"speed={info['speed']:.2f}m/s lat={info['lateral_error']:.2f}m "
@@ -134,6 +152,30 @@ def main() -> None:
             time.sleep(env.frame_skip * env.model.opt.timestep)
 
         viewer.close()
+
+
+def make_autopilot(env: RacingEnv, args: argparse.Namespace) -> tuple[object, str]:
+    if args.policy_model is None:
+        return make_controller(args.autopilot, env.track), args.autopilot
+
+    from stable_baselines3 import PPO
+
+    model = PPO.load(args.policy_model)
+    return (
+        PolicyDriver(model, deterministic=args.deterministic),
+        f"ppo:{args.policy_model.stem}",
+    )
+
+
+class PolicyDriver:
+    def __init__(self, model: object, deterministic: bool) -> None:
+        self.model = model
+        self.deterministic = deterministic
+
+    def act(self, observation: np.ndarray, info: dict[str, Any]) -> np.ndarray:
+        del info
+        action, _state = self.model.predict(observation, deterministic=self.deterministic)
+        return np.asarray(action, dtype=np.float32)
 
 
 def apply_viewer_camera(viewer: object, env: RacingEnv, camera_name: str) -> None:

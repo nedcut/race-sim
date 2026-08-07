@@ -3,17 +3,22 @@
 This project currently uses a simplified MuJoCo vehicle model. The car is a free chassis body with visual wheel geometry. The environment applies a bicycle-style tire-force proxy:
 
 - front steering angle from the steering action
-- front/rear lateral tire-force proxies from slip angles
+- front/rear lateral tire-force proxies from slip angles with smooth saturation
 - configurable drivetrain split: `rwd`, `fwd`, or `awd`
 - throttle, brake, and brake-bias longitudinal forces
 - load transfer from longitudinal acceleration
 - configurable tire grip, combined tire-force limiting, and reported tire usage
+- reported slip angles, tire forces, normal loads, yaw torque, and understeer score
 - optional aero downforce with front/rear balance
 - drag, rolling resistance, yaw damping, and action smoothing
 
 That means the current car is useful for testing the environment loop, reward, progress metric, heuristic baseline, and evaluation tooling. It should feel more car-like than raw yaw torque, but it is not yet a full wheel/contact tire model.
 
+**Model revision note:** tire forces use smooth tanh saturation (combined with ellipse limits). Policies or baselines trained before this revision are not directly comparable — retrain before quoting lap times.
+
 Each catalog track has a matching MuJoCo world with track surface, boundaries, and centerline markers so the native viewer matches the Python-side track geometry used for reward and evaluation.
+
+`info["off_track"]` uses the same margin-aware test as episode termination (`track.is_off_track(..., margin=off_track_margin)`).
 
 ## What Is Worth Trusting Now
 
@@ -51,6 +56,12 @@ Run open-loop physics telemetry:
 racesim-physics-benchmarks
 ```
 
+To also write a compact Markdown report:
+
+```bash
+racesim-physics-benchmarks --markdown-output results/physics_benchmarks.md
+```
+
 Render a top-down rollout:
 
 ```bash
@@ -76,7 +87,7 @@ Keyboard controls are printed when the script starts. The driving keys avoid WAS
 - `F` / `G`: steer left/right
 - `T`: center steering
 - `Space`: zero steering/throttle/brake
-- `H`: toggle heuristic autopilot
+- `H`: toggle the selected autopilot controller. The default is `racing_line`; pass `--autopilot centerline` for the slower centerline follower.
 - `1`: chase camera
 - `2`: top-down camera
 - `3`: reset free camera

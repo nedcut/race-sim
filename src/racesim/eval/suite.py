@@ -115,6 +115,7 @@ def run_eval_suite(
         "smoke_steps": smoke_steps,
         "catalog_smoke": smoke,
         "physics_benchmarks": physics["benchmarks"],
+        "physics_sanity_flags": physics["sanity_flags"],
         "physics_threshold_policy": "telemetry_only",
         "policy_model": str(policy_model),
         "policy_matrix": policy,
@@ -286,25 +287,21 @@ def render_markdown(result: dict[str, Any]) -> str:
         ]
     )
     physics = result["physics_benchmarks"]
-    acceleration = physics["acceleration"]
-    braking = physics["braking"]
-    turning = physics["steady_turning"]
-    repeatability = physics["repeatability"]
     lines.extend(
         [
-            f"- acceleration: final `{acceleration['final_speed_mps']:.2f} m/s`, "
-            f"avg `{acceleration['average_acceleration_mps2']:.2f} m/s^2`, "
-            f"off-track `{acceleration['off_track']}`",
-            f"- braking: stopped `{braking['stopped']}`, distance "
-            f"`{braking['braking_distance_m']:.2f} m`, avg decel "
-            f"`{braking['average_deceleration_mps2']:.2f} m/s^2`",
-            f"- steady turning: yaw rate `{turning['mean_abs_steady_yaw_rate_radps']:.3f} rad/s`, "
-            f"radius `{turning['estimated_turn_radius_m']:.1f} m`, "
-            f"off-track `{turning['off_track']}`",
-            f"- repeatability: deterministic `{repeatability['deterministic']}`, "
-            f"max obs delta `{repeatability['max_abs_observation_delta']}`",
+            "| benchmark | steps | final speed | yaw rate | tire usage | notes |",
+            "| --- | ---: | ---: | ---: | ---: | --- |",
         ]
     )
+    for name, metrics in physics.items():
+        lines.append(physics_row(name, metrics))
+
+    lines.extend(["", "### Sanity Flags", ""])
+    flags = result.get("physics_sanity_flags", [])
+    if flags:
+        lines.extend(f"- {flag}" for flag in flags)
+    else:
+        lines.append("- none")
 
     lines.extend(["", "## Failure Cases", ""])
     if result["failure_cases"]:
@@ -348,6 +345,28 @@ def smoke_table(rows: list[dict]) -> list[str]:
             f"{row['lap_fraction']:.2f} | {row['speed']:.2f} |"
         )
     return lines
+
+
+def physics_row(name: str, metrics: dict[str, Any]) -> str:
+    final_speed = metrics.get("final_speed_mps")
+    yaw_rate = metrics.get("mean_abs_yaw_rate_radps") or metrics.get(
+        "mean_abs_steady_yaw_rate_radps"
+    )
+    tire_usage = metrics.get("peak_tire_usage")
+    notes = []
+    if metrics.get("off_track"):
+        notes.append("off-track")
+    if metrics.get("terminated"):
+        notes.append("terminated")
+    if metrics.get("deterministic") is not None:
+        notes.append(f"deterministic={metrics['deterministic']}")
+    if metrics.get("stopped") is not None:
+        notes.append(f"stopped={metrics['stopped']}")
+    return (
+        f"| {name} | {metrics.get('steps', metrics.get('first_steps', 0))} | "
+        f"{format_optional(final_speed)} | {format_optional(yaw_rate)} | "
+        f"{format_optional(tire_usage)} | {', '.join(notes) or '-'} |"
+    )
 
 
 def format_optional(value: float | None) -> str:
