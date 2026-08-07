@@ -1,0 +1,28 @@
+seed: 0
+total_timesteps: 2000
+output_dir: results/ppo_oval_quick
+env:
+  env_configs:
+    - configs/env.yaml
+  randomize_reset: true
+  lap_target: 1.0
+  max_episode_steps: 400
+ppo:
+  policy: MlpPolicy
+  n_steps: 256
+  batch_size: 64
+  learning_rate: 0.0003
+  gamma: 0.99
+  gae_lambda: 0.95
+  ent_coef: 0.01
+  clip_range: 0.2
+eval:
+  env_config: configs/env.yaml
+  frequency: 100000
+  episodes: 1
+  max_steps: 400
+  deterministic: true
+  save_best: false
+live:
+  enabled: false
+  directory: results/ppo_oval_quick/live
