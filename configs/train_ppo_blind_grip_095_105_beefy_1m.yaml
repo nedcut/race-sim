@@ -42,7 +42,7 @@ curriculum:
         - 0.25
 ppo:
   policy: MlpPolicy
-  device: mps
+  device: auto
   n_steps: 2048
   batch_size: 512
   learning_rate: 0.0002

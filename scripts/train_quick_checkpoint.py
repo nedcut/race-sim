@@ -47,7 +47,8 @@ def main() -> int:
     # Ensure relative paths resolve from repo root when invoked from elsewhere.
     os.chdir(REPO_ROOT)
 
-    from racesim.training.train_ppo import load_train_config, main as train_main
+    from racesim.training.train_ppo import load_train_config
+    from racesim.training.train_ppo import main as train_main
 
     config = load_train_config(CONFIG_PATH)
     output_dir = Path(config.get("output_dir", "results/ppo_oval_quick"))

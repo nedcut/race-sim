@@ -102,7 +102,9 @@ def test_run_checks_and_format_report_with_bad_python(tmp_path: Path) -> None:
     assert "critical failure" in report
 
 
-def test_main_exits_nonzero_for_missing_repo(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_main_exits_nonzero_for_missing_repo(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     code = main(["--repo-root", str(tmp_path)])
     captured = capsys.readouterr()
     assert code == 1

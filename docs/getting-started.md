@@ -75,7 +75,25 @@ racesim-train-ppo --config configs/train_ppo_oval_quick.yaml
 
 This writes `artifacts/ppo_oval_quick.zip` when training succeeds.
 
+## Gymnasium
+
+```python
+import racesim  # registers RaceSim-v0 on import
+import gymnasium as gym
+
+env = gym.make("RaceSim-v0")
+# override: gym.make("RaceSim-v0", config="configs/env_s_curve.yaml")
+# or: export RACESIM_CONFIG=configs/env_hairpin.yaml
+```
+
+Entry point registration is also declared in `pyproject.toml` under
+`[project.entry-points."gymnasium.envs"]` so editable installs pick it up after
+`pip install -e .`.
+
 ## Next steps
 
 - [README.md](../README.md) — First 10 minutes and advanced CLI
 - [docs/simulation.md](simulation.md) — Current vehicle/physics model limits
+- [docs/observation-and-action.md](observation-and-action.md) — Observation / action / info
+- [docs/config-reference.md](config-reference.md) — Env YAML keys
+- [docs/tracks.md](tracks.md) — Authoring tracks

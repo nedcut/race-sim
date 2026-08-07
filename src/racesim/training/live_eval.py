@@ -5,7 +5,11 @@ from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
-from stable_baselines3.common.callbacks import BaseCallback
+
+try:
+    from stable_baselines3.common.callbacks import BaseCallback
+except ImportError:  # pragma: no cover - optional [rl] extra
+    BaseCallback = object  # type: ignore[misc, assignment]
 
 from racesim.env.racing_env import RacingEnv
 from racesim.eval.evaluate import telemetry_row

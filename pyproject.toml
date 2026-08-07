@@ -28,6 +28,9 @@ rl = [
   "torch>=2.2",
 ]
 
+[project.entry-points."gymnasium.envs"]
+__root__ = "racesim.env.registration:register_racesim_envs"
+
 [project.scripts]
 racesim-plot-track = "racesim.scripts.plot_track:main"
 racesim-smoke-mujoco = "racesim.scripts.smoke_mujoco:main"
