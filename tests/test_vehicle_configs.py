@@ -85,3 +85,25 @@ control:
     tire_config = getattr(env, "tire_model", env.control)
     assert tire_config.aero_downforce_coefficient == 18.0
     assert env._drive_split() == (1.0, 0.0)
+
+
+def test_catalog_env_yamls_prefer_vehicle_preset() -> None:
+    paths = [Path("configs/env.yaml"), *sorted(Path("configs").glob("env_*.yaml"))]
+    for path in paths:
+        config = yaml.safe_load(path.read_text(encoding="utf-8"))
+        assert "vehicle" in config, path
+        assert "control" not in config, path
+        assert "tire_model" not in config, path
+
+    env = RacingEnv("configs/env.yaml")
+    assert env.control.max_drive_force == 2500.0
+
+
+def test_simulation_dt_overrides_model_timestep(tmp_path: Path) -> None:
+    env_config = tmp_path / "env_dt.yaml"
+    base = yaml.safe_load(Path("configs/env.yaml").read_text(encoding="utf-8"))
+    base["simulation"]["dt"] = 0.01
+    env_config.write_text(yaml.safe_dump(base), encoding="utf-8")
+    env = RacingEnv(env_config)
+    assert abs(env.model.opt.timestep - 0.01) < 1e-12
+    assert abs(env.control_timestep() - 0.04) < 1e-12

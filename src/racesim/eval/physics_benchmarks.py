@@ -70,7 +70,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--enforce",
         action="store_true",
-        help="Exit with code 1 when any sanity_flags are raised.",
+        help="Exit with code 1 when hard sanity flags or soft range violations fire.",
+    )
+    parser.add_argument(
+        "--enforce-hard-only",
+        action="store_true",
+        help="With --enforce, only fail on hard sanity flags (skip soft ranges).",
     )
     return parser.parse_args(argv)
 
@@ -86,6 +91,7 @@ def main(argv: list[str] | None = None) -> None:
         turning_steps=args.turning_steps,
         maneuver_steps=args.maneuver_steps,
         repeatability_steps=args.repeatability_steps,
+        include_soft_ranges=not args.enforce_hard_only,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -110,6 +116,7 @@ def run_physics_benchmarks(
     turning_steps: int = 160,
     maneuver_steps: int = 180,
     repeatability_steps: int = 80,
+    include_soft_ranges: bool = True,
 ) -> dict[str, Any]:
     config_path = resolve_physics_config(config_path)
     benchmark_set = set(benchmarks)
@@ -149,11 +156,14 @@ def run_physics_benchmarks(
             repeatability_steps,
         )
 
+    flags = sanity_flags(results)
+    if include_soft_ranges:
+        flags = flags + soft_range_flags(results)
     return {
         "config": str(config_path),
         "seed": int(seed),
         "benchmarks": results,
-        "sanity_flags": sanity_flags(results),
+        "sanity_flags": flags,
     }
 
 
@@ -711,6 +721,34 @@ def max_abs(values) -> float:
     if not values:
         return 0.0
     return float(max(abs(value) for value in values))
+
+
+# Loose touring-pad bounds for regression; not physical design targets.
+DEFAULT_SOFT_RANGES: dict[tuple[str, str], tuple[float, float]] = {
+    ("acceleration", "average_acceleration_mps2"): (0.5, 25.0),
+    ("braking", "average_deceleration_mps2"): (0.5, 40.0),
+}
+
+
+def soft_range_flags(
+    benchmarks: dict[str, Any],
+    ranges: dict[tuple[str, str], tuple[float, float]] | None = None,
+) -> list[str]:
+    ranges = ranges or DEFAULT_SOFT_RANGES
+    flags: list[str] = []
+    for (benchmark, metric), (low, high) in ranges.items():
+        payload = benchmarks.get(benchmark)
+        if not payload or metric not in payload:
+            continue
+        value = payload[metric]
+        if value is None:
+            continue
+        number = float(value)
+        if number < low or number > high:
+            flags.append(
+                f"{benchmark} {metric} {number:.3f} outside [{low:.3f}, {high:.3f}]"
+            )
+    return flags
 
 
 def sanity_flags(benchmarks: dict[str, Any]) -> list[str]:

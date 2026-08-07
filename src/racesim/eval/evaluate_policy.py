@@ -11,7 +11,7 @@ import numpy as np
 
 from racesim.env.racing_env import RacingEnv
 from racesim.eval.evaluate import telemetry_row
-from racesim.eval.metrics import EpisodeMetrics, summarize_episodes
+from racesim.eval.metrics import EpisodeMetrics, path_error_metrics, summarize_episodes
 
 PredictFn = Callable[[np.ndarray, dict[str, Any]], np.ndarray]
 
@@ -123,12 +123,18 @@ def evaluate_predict(
         total_reward = 0.0
         trajectory: list[dict[str, Any]] = []
         steps = 0
+        lateral_errors: list[float] = []
+        heading_errors: list[float] = []
+        speeds: list[float] = []
         for steps in range(1, max_steps + 1):
             action = np.asarray(predict(observation, info), dtype=np.float32)
             observation, reward, terminated, truncated, info = env.step(action)
             total_reward += reward
+            lateral_errors.append(float(info["lateral_error"]))
+            heading_errors.append(float(info["heading_error"] or 0.0))
+            speeds.append(float(info["speed"]))
             if record_trajectory:
-                sim_time = steps * env.frame_skip * env.model.opt.timestep
+                sim_time = steps * env.control_timestep()
                 trajectory.append(
                     telemetry_row(
                         steps,
@@ -143,16 +149,18 @@ def evaluate_predict(
             if terminated or truncated:
                 break
 
+        path = path_error_metrics(lateral_errors, heading_errors, speeds)
         metrics = EpisodeMetrics(
             episode=episode,
             seed=seed,
             steps=steps,
-            sim_time=float(steps * env.frame_skip * env.model.opt.timestep),
+            sim_time=float(steps * env.control_timestep()),
             total_reward=float(total_reward),
             lap_complete=bool(info["lap_complete"]),
             off_track=bool(info["off_track"]),
             lap_fraction=float(info["lap_fraction"]),
             cumulative_lap_fraction=float(info["cumulative_lap_fraction"]),
+            **path,
         )
         results.append({"metrics": metrics, "trajectory": trajectory})
 

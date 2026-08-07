@@ -23,8 +23,11 @@ tire_model:
   combined_slip_exponent: 2.0
   brake_front_bias: 0.64
   aero_downforce_coefficient: 18.0
+  aero_drag_coefficient: 3.5
   aero_front_balance: 0.48
   peak_slip_angle: 0.09
   lateral_saturation_softness: 0.95
   longitudinal_saturation_softness: 0.85
   low_speed_slip_floor: 1.4
+chassis:
+  mass_kg: 720.0

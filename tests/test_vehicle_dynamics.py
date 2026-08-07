@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 
@@ -154,3 +155,47 @@ def test_sustained_steering_generates_yaw_without_artificial_speed_collapse() ->
 
     assert info["speed"] > 7.0
     assert info["yaw_rate"] > 0.3
+
+
+def test_higher_mass_slows_acceleration(tmp_path: Path) -> None:
+    light = tmp_path / "light.yaml"
+    heavy = tmp_path / "heavy.yaml"
+    base = Path("configs/env.yaml").read_text(encoding="utf-8")
+    light.write_text(base + "\nchassis:\n  mass_kg: 200.0\n", encoding="utf-8")
+    heavy.write_text(base + "\nchassis:\n  mass_kg: 900.0\n", encoding="utf-8")
+
+    def final_speed(path: Path) -> float:
+        env = RacingEnv(path)
+        env.max_episode_steps = 40
+        env.lap_target = float("inf")
+        env.off_track_margin = 1e6
+        env.reset(seed=0, options={"initial_speed": 2.0})
+        info = {}
+        for _ in range(30):
+            _obs, _rew, _term, _trunc, info = env.step(
+                np.array([0.0, 1.0, 0.0], dtype=np.float32)
+            )
+        return float(info["speed"])
+
+    assert final_speed(light) > final_speed(heavy)
+
+
+def test_aero_drag_reduces_terminal_speed() -> None:
+    from dataclasses import replace
+
+    env = RacingEnv("configs/env.yaml")
+    env.max_episode_steps = 80
+    env.lap_target = float("inf")
+    env.off_track_margin = 1e6
+
+    def peak_speed(cd: float) -> float:
+        env.tire_model = replace(env.tire_model, aero_drag_coefficient=cd)
+        env.reset(seed=0, options={"initial_speed": 5.0})
+        info = {}
+        for _ in range(50):
+            _obs, _rew, _term, _trunc, info = env.step(
+                np.array([0.0, 1.0, 0.0], dtype=np.float32)
+            )
+        return float(info["speed"])
+
+    assert peak_speed(0.0) > peak_speed(12.0)

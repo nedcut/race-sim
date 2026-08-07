@@ -17,6 +17,7 @@ from racesim.eval.physics_benchmarks import (
     resolve_physics_config,
     run_physics_benchmarks,
     skidpad_benchmark,
+    soft_range_flags,
     steady_turning_benchmark,
 )
 
@@ -205,3 +206,16 @@ def test_physics_benchmarks_cli_without_enforce_keeps_exit_zero(
     )
     main(["--output", str(output), "--benchmarks", "acceleration"])
     assert output.exists()
+
+
+def test_soft_range_flags_detect_out_of_band_accel() -> None:
+    flags = soft_range_flags(
+        {"acceleration": {"average_acceleration_mps2": 0.01}},
+    )
+    assert flags
+    assert "outside" in flags[0]
+
+    clean = soft_range_flags(
+        {"acceleration": {"average_acceleration_mps2": 5.0}},
+    )
+    assert clean == []
