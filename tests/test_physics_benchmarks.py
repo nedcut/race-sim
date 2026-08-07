@@ -3,12 +3,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from racesim.eval.physics_benchmarks import (
+    BENCHMARK_PAD_CONFIG,
     acceleration_benchmark,
     braking_benchmark,
+    default_physics_config,
     main,
+    make_open_loop_env,
     render_markdown,
     repeatability_benchmark,
+    resolve_physics_config,
     run_physics_benchmarks,
     skidpad_benchmark,
     steady_turning_benchmark,
@@ -140,3 +146,62 @@ def test_benchmark_env_off_track_respects_disabled_termination() -> None:
     metrics = result["benchmarks"]["acceleration"]
     assert metrics["off_track"] is False
     assert not any("off-track" in flag for flag in result["sanity_flags"])
+
+
+def test_default_physics_config_prefers_benchmark_pad() -> None:
+    assert BENCHMARK_PAD_CONFIG.exists()
+    assert default_physics_config() == BENCHMARK_PAD_CONFIG
+    assert resolve_physics_config(None) == BENCHMARK_PAD_CONFIG
+    assert resolve_physics_config("configs/env.yaml") == Path("configs/env.yaml")
+
+
+def test_make_open_loop_env_defaults_to_pad() -> None:
+    env = make_open_loop_env(None, max_steps=4)
+    assert env.off_track_margin == pytest.approx(1e6)
+    result = run_physics_benchmarks(
+        seed=0,
+        benchmarks=["acceleration"],
+        acceleration_steps=2,
+    )
+    assert result["config"] == str(BENCHMARK_PAD_CONFIG)
+
+
+def test_physics_benchmarks_cli_enforce_exits_on_flags(tmp_path: Path, monkeypatch) -> None:
+    output = tmp_path / "benchmarks.json"
+
+    def fake_run(**_kwargs):
+        return {
+            "config": "configs/env_benchmark_pad.yaml",
+            "seed": 0,
+            "benchmarks": {"acceleration": {"steps": 1}},
+            "sanity_flags": ["acceleration did not increase speed"],
+        }
+
+    monkeypatch.setattr(
+        "racesim.eval.physics_benchmarks.run_physics_benchmarks",
+        fake_run,
+    )
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--output", str(output), "--enforce", "--benchmarks", "acceleration"])
+    assert exc_info.value.code == 1
+
+
+def test_physics_benchmarks_cli_without_enforce_keeps_exit_zero(
+    tmp_path: Path, monkeypatch
+) -> None:
+    output = tmp_path / "benchmarks.json"
+
+    def fake_run(**_kwargs):
+        return {
+            "config": "configs/env_benchmark_pad.yaml",
+            "seed": 0,
+            "benchmarks": {"acceleration": {"steps": 1}},
+            "sanity_flags": ["acceleration did not increase speed"],
+        }
+
+    monkeypatch.setattr(
+        "racesim.eval.physics_benchmarks.run_physics_benchmarks",
+        fake_run,
+    )
+    main(["--output", str(output), "--benchmarks", "acceleration"])
+    assert output.exists()

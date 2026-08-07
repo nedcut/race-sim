@@ -23,12 +23,36 @@ DEFAULT_BENCHMARKS: tuple[BenchmarkName, ...] = (
     "repeatability",
 )
 
+BENCHMARK_PAD_CONFIG = Path("configs/env_benchmark_pad.yaml")
+FALLBACK_PHYSICS_CONFIG = Path("configs/env.yaml")
+
+
+def default_physics_config() -> Path:
+    """Prefer the wide open-loop pad when present; keep oval env as fallback."""
+    if BENCHMARK_PAD_CONFIG.exists():
+        return BENCHMARK_PAD_CONFIG
+    return FALLBACK_PHYSICS_CONFIG
+
+
+def resolve_physics_config(config_path: str | Path | None = None) -> Path:
+    if config_path is None:
+        return default_physics_config()
+    return Path(config_path)
+
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run open-loop physics quality benchmarks for RacingEnv."
     )
-    parser.add_argument("--config", type=Path, default=Path("configs/env.yaml"))
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help=(
+            "Env config for open-loop runs. Defaults to configs/env_benchmark_pad.yaml when "
+            "present, otherwise configs/env.yaml."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--benchmarks",
@@ -43,6 +67,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--repeatability-steps", type=int, default=80)
     parser.add_argument("--output", type=Path, default=Path("results/physics_benchmarks.json"))
     parser.add_argument("--markdown-output", type=Path, default=None)
+    parser.add_argument(
+        "--enforce",
+        action="store_true",
+        help="Exit with code 1 when any sanity_flags are raised.",
+    )
     return parser.parse_args(argv)
 
 
@@ -66,10 +95,14 @@ def main(argv: list[str] | None = None) -> None:
         args.markdown_output.write_text(render_markdown(result), encoding="utf-8")
     print(json.dumps(result["benchmarks"], indent=2))
     print(f"Wrote {args.output}")
+    if args.enforce and result["sanity_flags"]:
+        for flag in result["sanity_flags"]:
+            print(f"sanity flag: {flag}")
+        raise SystemExit(1)
 
 
 def run_physics_benchmarks(
-    config_path: str | Path = "configs/env.yaml",
+    config_path: str | Path | None = None,
     seed: int = 0,
     benchmarks: list[BenchmarkName] | tuple[BenchmarkName, ...] = DEFAULT_BENCHMARKS,
     acceleration_steps: int = 120,
@@ -78,6 +111,7 @@ def run_physics_benchmarks(
     maneuver_steps: int = 180,
     repeatability_steps: int = 80,
 ) -> dict[str, Any]:
+    config_path = resolve_physics_config(config_path)
     benchmark_set = set(benchmarks)
     unknown = benchmark_set.difference(DEFAULT_BENCHMARKS)
     if unknown:
@@ -644,8 +678,9 @@ def step_dt(env: RacingEnv) -> float:
     return float(env.frame_skip * env.model.opt.timestep)
 
 
-def make_open_loop_env(config_path: str | Path, max_steps: int) -> RacingEnv:
-    env = RacingEnv(config_path)
+def make_open_loop_env(config_path: str | Path | None, max_steps: int) -> RacingEnv:
+    """Build an env that ignores lap/off-track termination for open-loop telemetry."""
+    env = RacingEnv(resolve_physics_config(config_path))
     env.max_episode_steps = max_steps
     env.lap_target = float("inf")
     env.off_track_margin = 1e6
