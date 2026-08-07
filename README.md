@@ -43,6 +43,25 @@ Docs:
 
 - [docs/getting-started.md](docs/getting-started.md) — install, macOS `mjpython`, Linux headless, working directory
 - [docs/simulation.md](docs/simulation.md) — vehicle model and what claims are safe
+- [docs/observation-and-action.md](docs/observation-and-action.md) — 19-D observation, actions, `info` keys
+- [docs/config-reference.md](docs/config-reference.md) — env YAML structure
+- [docs/tracks.md](docs/tracks.md) — track authoring workflow
+
+Gym integration:
+
+```python
+import racesim  # registers RaceSim-v0
+import gymnasium as gym
+
+env = gym.make("RaceSim-v0")  # or RACESIM_CONFIG / config=...
+```
+
+Examples (from repo root):
+
+```bash
+python examples/custom_controller.py
+python examples/sb3_train_minimal.py --timesteps 10000  # needs [rl]
+```
 
 Optional: if `artifacts/ppo_oval_quick.zip` exists (or after you train it — see below), evaluate the tiny demo policy:
 
@@ -125,12 +144,23 @@ Available training configs:
 The staged-progress 1M config uses Stable-Baselines3's default `MlpPolicy`
 network: separate actor and critic MLPs with `[64, 64]` hidden layers and Tanh
 activations. The nominal and blind-grip configs use larger separate actor and
-critic networks with `[256, 256, 128]` hidden layers and request `device: mps`
-for Apple Silicon training. They use four subprocess environments and save both
-`final_model.zip` and the best live-eval checkpoint as `best_model.zip`. The
-blind-grip config samples `grip_scale` uniformly from `0.95` to `1.05` at reset,
-but does not add grip to the observation, so the policy must infer grip from
-vehicle behavior.
+critic networks with `[256, 256, 128]` hidden layers and set `device: auto`
+(CUDA → MPS → CPU via `racesim.utils.device.resolve_torch_device`). They use four
+subprocess environments and save both `final_model.zip` and the best live-eval
+checkpoint as `best_model.zip`. The blind-grip config samples `grip_scale`
+uniformly from `0.95` to `1.05` at reset, but does not add grip to the
+observation, so the policy must infer grip from vehicle behavior.
+
+Policy-agnostic evaluation (any `predict(obs, info) -> action`):
+
+```python
+from racesim.eval.evaluate_policy import evaluate_predict
+
+result = evaluate_predict(predict=my_act, config_path="configs/env.yaml", episodes=3)
+```
+
+CLI still supports SB3 checkpoints (`racesim-evaluate-policy --model ...`) and a
+quick smoke path (`--predict-demo`).
 
 ## Analysis Outputs
 

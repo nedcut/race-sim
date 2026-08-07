@@ -4,16 +4,21 @@ from pathlib import Path
 
 import numpy as np
 
-from racesim.eval.evaluate_policy import evaluate_policy_model
+from racesim.eval.evaluate_policy import evaluate_policy_model, evaluate_predict
 from racesim.training.live_dashboard import LiveDashboard
 from racesim.training.live_eval import best_score
 from racesim.training.train_ppo import load_train_config, make_training_env
+from racesim.utils.device import apply_device_to_ppo_config
 
 
 class DummyPolicy:
     def predict(self, _observation, deterministic: bool = True):
         del deterministic
         return np.array([0.0, 0.2, 0.0], dtype=np.float32), None
+
+
+def _constant_predict(_observation, _info):
+    return np.array([0.0, 0.15, 0.0], dtype=np.float32)
 
 
 def test_train_config_builds_curriculum_env() -> None:
@@ -95,6 +100,31 @@ def test_evaluate_policy_model_with_dummy_policy() -> None:
     assert result["controller"] == "ppo"
     assert result["reset_options"]["grip_scale"] == 0.95
     assert len(result["episodes"][0]["trajectory"]) == 2
+
+
+def test_evaluate_predict_callable() -> None:
+    result = evaluate_predict(
+        predict=_constant_predict,
+        config_path=Path("configs/env.yaml"),
+        episodes=1,
+        max_steps=3,
+        lap_target=1.0,
+        record_trajectory=False,
+        controller_name="custom",
+    )
+    assert result["controller"] == "custom"
+    assert result["summary"]["episodes"] == 1
+
+
+def test_beefy_train_configs_use_auto_device() -> None:
+    for path in (
+        Path("configs/train_ppo_nominal_beefy_1m.yaml"),
+        Path("configs/train_ppo_blind_grip_095_105_beefy_1m.yaml"),
+    ):
+        config = load_train_config(path)
+        assert config["ppo"]["device"] == "auto"
+        resolved = apply_device_to_ppo_config(dict(config["ppo"]))
+        assert resolved["device"] in {"cpu", "cuda", "mps"}
 
 
 def test_live_dashboard_waiting_update_does_not_crash(tmp_path) -> None:

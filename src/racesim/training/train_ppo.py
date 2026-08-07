@@ -9,6 +9,7 @@ import yaml
 
 from racesim.training.curriculum_env import TrackCurriculumEnv
 from racesim.training.live_eval import LiveEvalCallback
+from racesim.utils.device import apply_device_to_ppo_config, resolve_torch_device
 
 try:
     from stable_baselines3.common.callbacks import BaseCallback
@@ -53,8 +54,9 @@ def main() -> None:
     seed = int(config.get("seed", 0))
     vec_env = make_vec_env(config, Monitor, DummyVecEnv, SubprocVecEnv)
 
-    ppo_config = dict(config.get("ppo", {}))
+    ppo_config = apply_device_to_ppo_config(dict(config.get("ppo", {})))
     policy = ppo_config.pop("policy", "MlpPolicy")
+    device = ppo_config.get("device", resolve_torch_device("auto"))
     model = PPO(
         policy,
         vec_env,
@@ -63,7 +65,7 @@ def main() -> None:
         tensorboard_log=str(output_dir),
         **ppo_config,
     )
-    print(f"PPO device: {model.device}")
+    print(f"PPO device: {model.device} (resolved from config as {device})")
 
     callbacks = []
     stage_config = config.get("curriculum", {}).get("stages", [])
