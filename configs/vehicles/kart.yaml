@@ -24,3 +24,7 @@ tire_model:
   brake_front_bias: 0.55
   aero_downforce_coefficient: 0.0
   aero_front_balance: 0.5
+  peak_slip_angle: 0.10
+  lateral_saturation_softness: 1.0
+  longitudinal_saturation_softness: 0.9
+  low_speed_slip_floor: 1.0

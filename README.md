@@ -10,7 +10,7 @@ This repository studies continuous control for autonomous racing in a simplified
 - Unit tests for track geometry, reset randomization, vehicle dynamics, evaluation tools, and training helpers
 - Track plotting, validation, rollout rendering, comparison, and smoke-test scripts
 - Minimal MuJoCo/Gymnasium environment with continuous steering/throttle/brake actions
-- Bicycle-style vehicle dynamics with front steering, drivetrain split, load transfer, combined tire-force limits, brake bias, aero downforce, and action smoothing
+- Bicycle-style vehicle dynamics with front steering, drivetrain split, load transfer, smooth tire saturation, combined tire-force limits, brake bias, aero downforce, and action smoothing
 - Vehicle presets for touring, kart, and formula-style setups
 - Centerline and racing-line heuristic baselines for smoke testing
 - Track catalog with spline-based layouts for curriculum/generalization, plus harder held-out layouts
@@ -93,7 +93,7 @@ The rollout plotting command produces:
 
 The vehicle sweep compares `rwd`, `fwd`, and `awd` under low/nominal/high grip scales and writes CSV/JSON summaries to `results/`.
 
-The physics benchmark command runs deterministic open-loop acceleration, braking, steady-turning, and repeatability checks. These are telemetry baselines rather than claims of real vehicle fidelity.
+The physics benchmark command runs deterministic open-loop acceleration, braking, steady-turning, skidpad, step-steer, slalom, braking-turn, throttle-exit, and repeatability checks. These are telemetry baselines rather than claims of real vehicle fidelity.
 
 The eval suite command runs tests, lint, catalog validation, controller smoke tests, default controller evals, physics telemetry, and the saved PPO policy matrix when the model artifact is present. It writes the tracked baseline report at [results/baselines.md](results/baselines.md).
 
@@ -105,7 +105,7 @@ The track catalog lives in [configs/track_catalog.yaml](configs/track_catalog.ya
 
 The current car is still a simplified free-body MuJoCo model, not a wheel/contact tire simulation. The environment applies forces from a bicycle-style tire proxy with axle loads, combined tire limits, and vehicle presets. See [docs/simulation.md](docs/simulation.md) for what is worth trusting now, what is intentionally simplified, and how to manually drive or render rollouts.
 
-On macOS, the keyboard viewer uses MuJoCo's `mjpython`; `racesim-keyboard-drive` will relaunch itself with it when available. Driving uses `I/K`, `J/U`, and `F/G` instead of WASD because MuJoCo reserves WASD for built-in viewer shortcuts. The default camera is a dynamic chase camera behind the car.
+On macOS, the keyboard viewer uses MuJoCo's `mjpython`; `racesim-keyboard-drive` will relaunch itself with it when available. Driving uses `I/K`, `J/U`, and `F/G` instead of WASD because MuJoCo reserves WASD for built-in viewer shortcuts. The default camera is a dynamic chase camera behind the car, and `H` toggles the selected autopilot controller. The default autopilot is `racing_line`; use `--autopilot centerline` for the slower centerline follower.
 
 ## Near-Term Build Order
 

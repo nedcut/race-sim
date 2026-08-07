@@ -83,9 +83,11 @@ def test_render_markdown_includes_threshold_decision() -> None:
                     "max_abs_observation_delta": 0.0,
                 },
             },
+            "physics_sanity_flags": [],
             "failure_cases": [],
         }
     )
 
     assert "Physics benchmarks stay telemetry-only" in markdown
+    assert "| acceleration |" in markdown
     assert "## Failure Cases" in markdown

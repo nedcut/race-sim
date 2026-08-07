@@ -5,11 +5,10 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-import numpy as np
-
 from racesim.controllers.factory import CONTROLLERS, make_controller
 from racesim.env.racing_env import RacingEnv
 from racesim.eval.metrics import EpisodeMetrics, summarize_episodes
+from racesim.eval.telemetry import telemetry_row
 
 
 def parse_args() -> argparse.Namespace:
@@ -143,48 +142,6 @@ def run_episode(
             cumulative_lap_fraction=float(info["cumulative_lap_fraction"]),
         ),
         "trajectory": trajectory,
-    }
-
-
-def telemetry_row(
-    step: int,
-    sim_time: float,
-    action: np.ndarray,
-    reward: float,
-    terminated: bool,
-    truncated: bool,
-    info: dict,
-) -> dict:
-    smoothed_action = np.asarray(info["smoothed_action"], dtype=float)
-    return {
-        "step": step,
-        "time": sim_time,
-        "x": float(info["position"][0]),
-        "y": float(info["position"][1]),
-        "heading": float(info["heading"]),
-        "progress": float(info["progress"]),
-        "lap_fraction": float(info["lap_fraction"]),
-        "cumulative_lap_fraction": float(info["cumulative_lap_fraction"]),
-        "progress_delta": float(info.get("progress_delta", 0.0)),
-        "raw_progress_delta": float(info.get("raw_progress_delta", 0.0)),
-        "progress_delta_clipped": bool(info.get("progress_delta_clipped", False)),
-        "speed": float(info["speed"]),
-        "longitudinal_speed": float(info["longitudinal_speed"]),
-        "lateral_speed": float(info["lateral_speed"]),
-        "yaw_rate": float(info["yaw_rate"]),
-        "lateral_error": float(info["lateral_error"]),
-        "heading_error": float(info["heading_error"] or 0.0),
-        "steering": float(action[0]),
-        "throttle": float(action[1]),
-        "brake": float(action[2]),
-        "smoothed_steering": float(smoothed_action[0]),
-        "smoothed_throttle": float(smoothed_action[1]),
-        "smoothed_brake": float(smoothed_action[2]),
-        "reward": float(reward),
-        "terminated": bool(terminated),
-        "truncated": bool(truncated),
-        "off_track": bool(info["off_track"]),
-        "lap_complete": bool(info["lap_complete"]),
     }
 
 
