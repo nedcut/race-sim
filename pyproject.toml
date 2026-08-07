@@ -4,10 +4,37 @@ build-backend = "hatchling.build"
 
 [project]
 name = "racesim"
-version = "0.1.0"
-description = "Simplified MuJoCo racing environment for control and robustness experiments."
+version = "0.2.0"
+description = "Professional MuJoCo/Gymnasium racing toolkit for control and RL research."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
+authors = [
+  { name = "Ned Cutler" },
+]
+keywords = [
+  "racing",
+  "mujoco",
+  "gymnasium",
+  "reinforcement-learning",
+  "control",
+  "simulation",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Physics",
+  "Typing :: Typed",
+]
 dependencies = [
   "gymnasium>=0.29",
   "imageio>=2.34",
@@ -19,6 +46,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "build>=1.2",
   "pytest>=8.0",
   "ruff>=0.6",
 ]
@@ -27,11 +55,22 @@ rl = [
   "tensorboard>=2.16",
   "torch>=2.2",
 ]
+all = [
+  "racesim[dev,rl]",
+]
+
+[project.urls]
+Homepage = "https://github.com/nedcut/race-sim"
+Repository = "https://github.com/nedcut/race-sim"
+Issues = "https://github.com/nedcut/race-sim/issues"
+Changelog = "https://github.com/nedcut/race-sim/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/nedcut/race-sim/tree/main/docs"
 
 [project.entry-points."gymnasium.envs"]
 __root__ = "racesim.env.registration:register_racesim_envs"
 
 [project.scripts]
+racesim = "racesim.cli:main"
 racesim-plot-track = "racesim.scripts.plot_track:main"
 racesim-smoke-mujoco = "racesim.scripts.smoke_mujoco:main"
 racesim-rollout = "racesim.scripts.rollout_env:main"
@@ -51,16 +90,44 @@ racesim-train-ppo = "racesim.training.train_ppo:main"
 racesim-evaluate-policy = "racesim.eval.evaluate_policy:main"
 racesim-live-dashboard = "racesim.training.live_dashboard:main"
 
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/configs",
+  "/assets",
+  "/docs",
+  "/examples",
+  "/tests",
+  "/LICENSE",
+  "/README.md",
+  "/CHANGELOG.md",
+  "/pyproject.toml",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/racesim"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"configs" = "racesim/_data/configs"
+"assets" = "racesim/_data/assets"
+"src/racesim/py.typed" = "racesim/py.typed"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+src = ["src", "tests", "examples", "scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

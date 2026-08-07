@@ -14,6 +14,7 @@ from racesim.eval.evaluate import evaluate
 from racesim.eval.evaluate_policy import evaluate_policy_model
 from racesim.eval.physics_benchmarks import run_physics_benchmarks
 from racesim.eval.smoke_tracks import smoke_tracks
+from racesim.paths import default_track_catalog
 
 DEFAULT_POLICY_MODEL = Path("results/ppo_blind_grip_095_105_beefy_1m/best_model.zip")
 
@@ -91,7 +92,7 @@ QUICK_PROFILE = SuiteProfile(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the project evaluation suite.")
-    parser.add_argument("--catalog", type=Path, default=Path("configs/track_catalog.yaml"))
+    parser.add_argument("--catalog", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=Path("results/baselines.md"))
     parser.add_argument("--json-output", type=Path, default=None)
     parser.add_argument(
@@ -150,7 +151,7 @@ def main() -> None:
     args = parse_args()
     profile = resolve_profile(args)
     result = run_eval_suite(
-        catalog_path=args.catalog,
+        catalog_path=args.catalog or default_track_catalog(),
         policy_model=args.policy_model,
         profile=profile,
     )
@@ -164,7 +165,7 @@ def main() -> None:
 
 
 def run_eval_suite(
-    catalog_path: Path = Path("configs/track_catalog.yaml"),
+    catalog_path: Path | None = None,
     smoke_steps: int | None = None,
     eval_episodes: int | None = None,
     eval_max_steps: int | None = None,
@@ -176,6 +177,7 @@ def run_eval_suite(
     profile: SuiteProfile | None = None,
 ) -> dict[str, Any]:
     active = profile or FULL_PROFILE
+    catalog_path = catalog_path or default_track_catalog()
     if smoke_steps is not None:
         active = SuiteProfile(**{**active.__dict__, "smoke_steps": smoke_steps})
     if eval_episodes is not None:

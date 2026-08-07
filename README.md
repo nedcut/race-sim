@@ -1,202 +1,149 @@
-# Learning to Drive a Simplified F1 Car in MuJoCo
+# RaceSim
 
-This repository studies continuous control for autonomous racing in a simplified MuJoCo environment. The first milestone is a trustworthy track geometry layer: centerline sampling, progress, heading error, lateral error, and off-track detection.
+**RaceSim** is a MuJoCo-backed [Gymnasium](https://gymnasium.farama.org/) racing toolkit for continuous control and reinforcement learning research. It ships a closed-track geometry layer, a transparent bicycle dynamics model, baseline controllers, evaluation suites, and optional PPO training.
 
-## Status
+> Honest scope: this is a **control / RL environment**, not an F1 tire laboratory. See [docs/simulation.md](docs/simulation.md) and [docs/dynamics-roadmap.md](docs/dynamics-roadmap.md).
 
-- MuJoCo / Gymnasium racing env with continuous steering, throttle, and brake
-- Closed-track geometry, multi-track catalog, and matching MJCF visual worlds
-- Bicycle-style vehicle dynamics (load transfer, tire saturation, drivetrain split, aero)
-- Heuristic baselines (centerline / racing line), keyboard drive, evaluation and physics tools
-- Optional PPO training via Stable-Baselines3 (`[rl]` extra)
-- Unit tests, track validation, and baseline reporting under `results/baselines.md`
-- Onboarding tools: `racesim-doctor`, `docs/getting-started.md`, optional quick PPO checkpoint under `artifacts/`
+[![CI](https://github.com/nedcut/race-sim/actions/workflows/ci.yml/badge.svg)](https://github.com/nedcut/race-sim/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.2.0-informational.svg)](CHANGELOG.md)
 
-## First 10 minutes
+---
 
-**Prerequisites:** Python **3.11+**. Optional OpenGL / desktop display for the MuJoCo viewer (keyboard drive and some render scripts). Full platform notes: [docs/getting-started.md](docs/getting-started.md).
+## Why RaceSim
+
+| Need | Built-in answer |
+|------|-----------------|
+| Gymnasium racing env | `gym.make("RaceSim-v0")` / `RacingEnv` |
+| Multi-track curricula | 14-track catalog + `TrackCurriculumEnv` |
+| Baselines without training | Centerline / racing-line heuristics |
+| Regression telemetry | Physics benchmarks + `racesim suite` |
+| PPO research path | Stable-Baselines3 extras + live eval |
+
+## Install
 
 ```bash
-# Clone and enter the repo (always run CLIs from this root)
-cd race-sim   # or your local path
+git clone https://github.com/nedcut/race-sim.git
+cd race-sim
 
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-# Editable install: dev tests + RL tooling
 pip install -e ".[dev,rl]"
-# If you use uv (repo includes uv.lock):
-#   uv sync --extra dev --extra rl
+# or: uv sync --extra dev --extra rl
 
-# Environment check
-racesim-doctor
-
-# Smoke tests
-pytest
-
-# CLI help + baseline evaluate
-racesim-keyboard-drive --help
-racesim-evaluate --controller racing_line --episodes 1 --output results/eval_racing_line.json
+racesim doctor
+pytest -q
 ```
 
-Docs:
+Extras:
 
-- [docs/getting-started.md](docs/getting-started.md) — install, macOS `mjpython`, Linux headless, working directory
-- [docs/simulation.md](docs/simulation.md) — vehicle model and what claims are safe
-- [docs/observation-and-action.md](docs/observation-and-action.md) — 19-D observation, actions, `info` keys
-- [docs/config-reference.md](docs/config-reference.md) — env YAML structure
-- [docs/tracks.md](docs/tracks.md) — track authoring workflow
+- `dev` — pytest, ruff, build
+- `rl` — Stable-Baselines3, torch, tensorboard
+- `all` — `dev` + `rl`
 
-Gym integration:
+Platform notes (macOS `mjpython`, headless Linux): [docs/getting-started.md](docs/getting-started.md).
+
+## Quick start
+
+### Unified CLI
+
+```bash
+racesim version
+racesim doctor
+racesim evaluate -- --controller racing_line --episodes 1 --max-steps 800
+racesim physics -- --enforce --benchmarks acceleration braking
+racesim suite -- --quick
+racesim keyboard -- --help
+```
+
+Legacy `racesim-*` entry points remain for scripts and CI.
+
+### Python API
 
 ```python
-import racesim  # registers RaceSim-v0
+import racesim
 import gymnasium as gym
+import numpy as np
 
-env = gym.make("RaceSim-v0")  # or RACESIM_CONFIG / config=...
+env = gym.make("RaceSim-v0")  # config via RACESIM_CONFIG or config=...
+obs, info = env.reset(seed=0)
+obs, reward, terminated, truncated, info = env.step(
+    np.array([0.0, 0.5, 0.0], dtype=np.float32)
+)
+env.close()
+
+from racesim import RacingEnv, ClosedTrack, __version__
+print(__version__, racesim.project_root())
 ```
 
-Examples (from repo root):
+### Examples
 
 ```bash
 python examples/custom_controller.py
 python examples/sb3_train_minimal.py --timesteps 10000  # needs [rl]
 ```
 
-Optional: if `artifacts/ppo_oval_quick.zip` exists (or after you train it — see below), evaluate the tiny demo policy:
+### Demo policy
+
+A short PPO checkpoint is optional under `artifacts/ppo_oval_quick.zip` (undertrained smoke model).
 
 ```bash
-racesim-evaluate-policy --model artifacts/ppo_oval_quick.zip --config configs/env.yaml --episodes 2 --deterministic
+racesim evaluate-policy -- --model artifacts/ppo_oval_quick.zip --episodes 1 --deterministic
+# regenerate: python scripts/train_quick_checkpoint.py
 ```
 
-Generate that checkpoint (short PPO run; needs `[rl]`):
+## Features
 
-```bash
-python scripts/train_quick_checkpoint.py
-# or:
-racesim-train-ppo --config configs/train_ppo_oval_quick.yaml
-cp results/ppo_oval_quick/final_model.zip artifacts/ppo_oval_quick.zip
+- **Track layer** — progress, lateral/heading error, off-track, catalog validation  
+- **Vehicle presets** — touring / kart / formula with chassis mass + aero parameters  
+- **Dynamics telemetry** — slip angles, tire usage, load transfer, understeer score  
+- **Eval tooling** — rollouts, plots, vehicle sweeps, multi-seed `configs/eval.yaml`  
+- **Training** — curriculum multi-track env, live eval dashboard, portable `device: auto`  
+- **Quality gates** — GitHub Actions CI, `--quick` suite, open-loop physics pad  
+
+## Project layout
+
+```text
+src/racesim/     Core package (env, eval, training, CLI)
+configs/         Env, vehicle, track, and train YAML
+assets/mjcf/     MuJoCo car + track worlds
+docs/            Manuals and model trust boundaries
+examples/        Minimal integration samples
+tests/           Pytest suite
+artifacts/       Optional demo checkpoints
 ```
 
-## Advanced CLI
+## Documentation
+
+| Doc | Content |
+|-----|---------|
+| [getting-started.md](docs/getting-started.md) | Install, platforms, first commands |
+| [observation-and-action.md](docs/observation-and-action.md) | Observation vector, actions, `info` |
+| [config-reference.md](docs/config-reference.md) | Env YAML fields |
+| [tracks.md](docs/tracks.md) | Track authoring |
+| [simulation.md](docs/simulation.md) | Physics model + trust boundary |
+| [dynamics-roadmap.md](docs/dynamics-roadmap.md) | Future dynamics work |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Dev workflow |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes |
+
+## Development
 
 ```bash
+pip install -e ".[dev,rl]"
 ruff check .
-racesim-validate-tracks
-racesim-plot-track --config configs/tracks/oval.yaml --output results/oval_track.png
-racesim-smoke-mujoco
-racesim-rollout --controller heuristic --steps 1800
-racesim-evaluate --controller heuristic --episodes 5 --output results/eval_heuristic.json
-racesim-evaluate --controller heuristic --episodes 1 --record-trajectory --output results/eval_heuristic_trajectory.json
-racesim-plot-rollout --input results/eval_heuristic_trajectory.json --output-dir results/plots
-racesim-evaluate --controller centerline --episodes 1 --record-trajectory --output results/eval_centerline_trajectory.json
-racesim-evaluate --controller racing_line --episodes 1 --record-trajectory --output results/eval_racing_line_trajectory.json
-racesim-compare-rollouts --input results/eval_centerline_trajectory.json results/eval_racing_line_trajectory.json --output-dir results/comparison
-racesim-sweep-vehicle --episodes 3
-racesim-smoke-tracks --controller racing_line --steps 1200 --output results/track_smoke.csv
-racesim-physics-benchmarks --output results/physics_benchmarks.json
-racesim-physics-benchmarks --enforce  # exit 1 if sanity_flags non-empty
-racesim-evaluate --eval-config configs/eval.yaml --max-steps 3000 --output results/eval_multi_seed.json
-racesim-eval-suite --output results/baselines.md
-racesim-eval-suite --quick --output results/baselines_quick.md
-racesim-render-rollout --controller heuristic --steps 1800
-racesim-make-track-visual --track configs/tracks/technical.yaml --output assets/mjcf/technical_track.xml --model-name technical_track_visuals
-racesim-keyboard-drive
+pytest
+racesim suite -- --quick
+python -m build   # sdist + wheel
 ```
 
-## PPO Training
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Start with the oval-only PPO config:
+## Versioning
 
-```bash
-racesim-train-ppo --config configs/train_ppo_oval.yaml
-```
-
-Watch live eval rollouts in another terminal:
-
-```bash
-racesim-live-dashboard --watch results/ppo_oval/live/latest_rollout.json
-```
-
-Evaluate a trained policy:
-
-```bash
-racesim-evaluate-policy --model results/ppo_oval/final_model.zip --config configs/env.yaml --episodes 5 --deterministic --record-trajectory --output results/eval_ppo_oval.json
-```
-
-For a minimal onboarding run (a few thousand timesteps into `artifacts/`):
-
-```bash
-python scripts/train_quick_checkpoint.py
-racesim-evaluate-policy --model artifacts/ppo_oval_quick.zip --config configs/env.yaml --episodes 2 --deterministic
-```
-
-Available training configs:
-
-- `configs/train_ppo_oval.yaml`
-- `configs/train_ppo_oval_quick.yaml` (short demo train for `artifacts/ppo_oval_quick.zip`)
-- `configs/train_ppo_easy.yaml`
-- `configs/train_ppo_curriculum.yaml`
-- `configs/train_ppo_staged_progress_1m.yaml`
-- `configs/train_ppo_nominal_beefy_1m.yaml`
-- `configs/train_ppo_blind_grip_095_105_beefy_1m.yaml`
-
-The staged-progress 1M config uses Stable-Baselines3's default `MlpPolicy`
-network: separate actor and critic MLPs with `[64, 64]` hidden layers and Tanh
-activations. The nominal and blind-grip configs use larger separate actor and
-critic networks with `[256, 256, 128]` hidden layers and set `device: auto`
-(CUDA → MPS → CPU via `racesim.utils.device.resolve_torch_device`). They use four
-subprocess environments and save both `final_model.zip` and the best live-eval
-checkpoint as `best_model.zip`. The blind-grip config samples `grip_scale`
-uniformly from `0.95` to `1.05` at reset, but does not add grip to the
-observation, so the policy must infer grip from vehicle behavior.
-
-Policy-agnostic evaluation (any `predict(obs, info) -> action`):
-
-```python
-from racesim.eval.evaluate_policy import evaluate_predict
-
-result = evaluate_predict(predict=my_act, config_path="configs/env.yaml", episodes=3)
-```
-
-CLI still supports SB3 checkpoints (`racesim-evaluate-policy --model ...`) and a
-quick smoke path (`--predict-demo`).
-
-## Analysis Outputs
-
-The rollout plotting command produces:
-
-- `trajectory.png`
-- `speed_vs_progress.png`
-- `controls_vs_progress.png`
-- `lateral_error_vs_progress.png`
-
-The vehicle sweep compares `rwd`, `fwd`, and `awd` under low/nominal/high grip scales and writes CSV/JSON summaries to `results/`.
-
-The physics benchmark command runs deterministic open-loop acceleration, braking, steady-turning, skidpad, step-steer, slalom, braking-turn, throttle-exit, and repeatability checks. By default it uses the wide `configs/env_benchmark_pad.yaml` pad (override with `--config`). These are telemetry baselines rather than claims of real vehicle fidelity; pass `--enforce` to fail when `sanity_flags` are non-empty.
-
-The eval suite command runs tests, lint, catalog validation, controller smoke tests, default controller evals, physics telemetry, and the saved PPO policy matrix when the model artifact is present. It writes the tracked baseline report at [results/baselines.md](results/baselines.md).
-
-### Quick suite (`--quick`)
-
-For a sub-~2 minute local check (lint + track validation + short physics pad + short racing-line eval; skips full pytest, catalog smoke, and PPO policy matrix):
-
-```bash
-racesim-eval-suite --quick --output results/baselines_quick.md
-# equivalent:
-racesim-eval-suite --profile quick --output results/baselines_quick.md
-```
-
-CI (`.github/workflows/ci.yml`) runs ruff, pytest, track validation, MuJoCo smoke, and a short racing-line evaluate on pushes/PRs to `main`.
-
-Multi-seed controller evaluation is configured in [configs/eval.yaml](configs/eval.yaml):
-
-```bash
-racesim-evaluate --eval-config configs/eval.yaml --output results/eval_multi_seed.json
-```
-
-The comparison plotting command overlays recorded controller trajectories and writes a compact summary table. The technical, street-circuit, grand-prix, kartplex, and endurance layouts are useful held-out challenge cases for controllers and learned policies.
+RaceSim follows [Semantic Versioning](https://semver.org/) for the public Python API (`racesim` package). Gym ID `RaceSim-v0` may evolve observation semantics only with a version bump and changelog entry.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE) © Ned Cutler

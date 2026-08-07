@@ -12,6 +12,7 @@ import numpy as np
 from racesim.env.racing_env import RacingEnv
 from racesim.eval.evaluate import telemetry_row
 from racesim.eval.metrics import EpisodeMetrics, path_error_metrics, summarize_episodes
+from racesim.paths import default_env_config
 
 PredictFn = Callable[[np.ndarray, dict[str, Any]], np.ndarray]
 
@@ -31,7 +32,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run a built-in open-loop throttle demo policy (no --model).",
     )
-    parser.add_argument("--config", type=Path, default=Path("configs/env.yaml"))
+    parser.add_argument("--config", type=Path, default=None)
     parser.add_argument("--episodes", type=int, default=5)
     parser.add_argument("--max-steps", type=int, default=2000)
     parser.add_argument("--lap-target", type=float, default=1.0)
@@ -64,7 +65,7 @@ def main() -> None:
 
     result = evaluate_predict(
         predict=predict,
-        config_path=args.config,
+        config_path=args.config or default_env_config(),
         episodes=args.episodes,
         max_steps=args.max_steps,
         lap_target=args.lap_target,

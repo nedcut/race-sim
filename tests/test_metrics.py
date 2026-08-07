@@ -6,7 +6,15 @@ from racesim.eval.metrics import EpisodeMetrics, summarize_episodes
 def test_summarize_episodes_reports_completion_and_best_lap_time() -> None:
     episodes = [
         EpisodeMetrics(
-            0, 0, 100, 8.0, 10.0, True, False, 0.0, 1.0,
+            0,
+            0,
+            100,
+            8.0,
+            10.0,
+            True,
+            False,
+            0.0,
+            1.0,
             mean_abs_lateral_error=0.4,
             max_abs_lateral_error=0.8,
             mean_abs_heading_error=0.1,
@@ -14,7 +22,15 @@ def test_summarize_episodes_reports_completion_and_best_lap_time() -> None:
             rms_lateral_error=0.5,
         ),
         EpisodeMetrics(
-            1, 1, 120, 9.6, 5.0, False, True, 0.5, 0.5,
+            1,
+            1,
+            120,
+            9.6,
+            5.0,
+            False,
+            True,
+            0.5,
+            0.5,
             mean_abs_lateral_error=0.6,
             max_abs_lateral_error=1.2,
             mean_abs_heading_error=0.3,

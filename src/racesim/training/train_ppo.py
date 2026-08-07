@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from racesim.paths import default_train_config
 from racesim.training.curriculum_env import TrackCurriculumEnv
 from racesim.training.live_eval import LiveEvalCallback
 from racesim.utils.device import apply_device_to_ppo_config, resolve_torch_device
@@ -19,7 +20,7 @@ except ImportError:  # pragma: no cover - dry-run config tests do not need SB3 i
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train PPO on the racing environment.")
-    parser.add_argument("--config", type=Path, default=Path("configs/train_ppo_oval.yaml"))
+    parser.add_argument("--config", type=Path, default=None)
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -30,7 +31,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    config = load_train_config(args.config)
+    config = load_train_config(args.config or default_train_config())
     output_dir = Path(config.get("output_dir", "results/ppo"))
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "train_config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
@@ -154,9 +155,8 @@ class CurriculumStageCallback(BaseCallback):
         self.next_stage = 0
 
     def _on_step(self) -> bool:
-        while (
-            self.next_stage < len(self.stages)
-            and self.num_timesteps >= int(self.stages[self.next_stage]["at_timesteps"])
+        while self.next_stage < len(self.stages) and self.num_timesteps >= int(
+            self.stages[self.next_stage]["at_timesteps"]
         ):
             stage = self.stages[self.next_stage]
             probabilities = [float(value) for value in stage["probabilities"]]

@@ -10,9 +10,7 @@ from racesim.env.track import ClosedTrack
 
 
 def catalog() -> dict:
-    return yaml.safe_load(Path("configs/track_catalog.yaml").read_text(encoding="utf-8"))[
-        "tracks"
-    ]
+    return yaml.safe_load(Path("configs/track_catalog.yaml").read_text(encoding="utf-8"))["tracks"]
 
 
 def test_track_catalog_tracks_have_sane_geometry() -> None:
@@ -23,9 +21,8 @@ def test_track_catalog_tracks_have_sane_geometry() -> None:
         assert track.name == name
         assert track.length > 80.0
         assert track.width > 0.0
-        assert not geometry_issues, (
-            f"{name} has invalid geometry: "
-            + ", ".join(issue.message for issue in geometry_issues)
+        assert not geometry_issues, f"{name} has invalid geometry: " + ", ".join(
+            issue.message for issue in geometry_issues
         )
 
 

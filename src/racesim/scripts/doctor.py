@@ -8,6 +8,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from racesim.paths import project_root
+
 MIN_PYTHON = (3, 11)
 REQUIRED_MODULES = ("gymnasium", "mujoco", "numpy", "yaml")
 OPTIONAL_RL_MODULES = ("stable_baselines3", "torch")
@@ -202,7 +204,7 @@ def run_checks(
     environ: dict[str, str] | None = None,
     version_info: tuple[int, ...] | None = None,
 ) -> list[CheckResult]:
-    root = (repo_root or Path.cwd()).resolve()
+    root = (repo_root or project_root()).resolve()
     results: list[CheckResult] = []
     results.append(check_python_version(version_info))
     results.extend(check_imports())

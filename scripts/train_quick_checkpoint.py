@@ -52,10 +52,7 @@ def main() -> int:
 
     config = load_train_config(CONFIG_PATH)
     output_dir = Path(config.get("output_dir", "results/ppo_oval_quick"))
-    print(
-        f"Quick PPO train: timesteps={config.get('total_timesteps')}, "
-        f"output_dir={output_dir}"
-    )
+    print(f"Quick PPO train: timesteps={config.get('total_timesteps')}, output_dir={output_dir}")
 
     # Re-parse via train CLI by temporarily adjusting sys.argv
     old_argv = sys.argv

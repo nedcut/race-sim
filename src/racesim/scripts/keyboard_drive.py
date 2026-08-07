@@ -14,11 +14,12 @@ import numpy as np
 
 from racesim.controllers.factory import CONTROLLERS, make_controller
 from racesim.env.racing_env import RacingEnv
+from racesim.paths import default_env_config
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Drive the simplified MuJoCo car manually.")
-    parser.add_argument("--config", type=Path, default=Path("configs/env.yaml"))
+    parser.add_argument("--config", type=Path, default=None)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--autopilot",
@@ -57,7 +58,7 @@ def main() -> None:
 
     import mujoco.viewer
 
-    env = RacingEnv(args.config)
+    env = RacingEnv(args.config or default_env_config())
     controller, controller_name = make_autopilot(env, args)
     observation, info = env.reset(seed=args.seed)
 
