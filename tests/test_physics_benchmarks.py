@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from racesim.eval.physics_benchmarks import (
-    BENCHMARK_PAD_CONFIG,
     acceleration_benchmark,
     braking_benchmark,
     default_physics_config,
@@ -20,6 +19,7 @@ from racesim.eval.physics_benchmarks import (
     soft_range_flags,
     steady_turning_benchmark,
 )
+from racesim.paths import default_benchmark_pad_config
 
 
 def test_physics_benchmarks_return_json_friendly_metrics() -> None:
@@ -150,10 +150,11 @@ def test_benchmark_env_off_track_respects_disabled_termination() -> None:
 
 
 def test_default_physics_config_prefers_benchmark_pad() -> None:
-    assert BENCHMARK_PAD_CONFIG.exists()
-    assert default_physics_config() == BENCHMARK_PAD_CONFIG
-    assert resolve_physics_config(None) == BENCHMARK_PAD_CONFIG
-    assert resolve_physics_config("configs/env.yaml") == Path("configs/env.yaml")
+    pad = default_benchmark_pad_config()
+    assert pad.exists()
+    assert default_physics_config() == pad
+    assert resolve_physics_config(None) == pad
+    assert resolve_physics_config("configs/env.yaml").name == "env.yaml"
 
 
 def test_make_open_loop_env_defaults_to_pad() -> None:
@@ -164,7 +165,7 @@ def test_make_open_loop_env_defaults_to_pad() -> None:
         benchmarks=["acceleration"],
         acceleration_steps=2,
     )
-    assert result["config"] == str(BENCHMARK_PAD_CONFIG)
+    assert Path(result["config"]).resolve() == default_benchmark_pad_config().resolve()
 
 
 def test_physics_benchmarks_cli_enforce_exits_on_flags(tmp_path: Path, monkeypatch) -> None:

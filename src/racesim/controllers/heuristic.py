@@ -113,9 +113,7 @@ class RacingLineHeuristicController(HeuristicController):
 
     def _signed_curvature(self, progress: float, lookahead: float) -> float:
         _point, tangent, _normal = self.track.sample_at(progress)
-        _future_point, future_tangent, _future_normal = self.track.sample_at(
-            progress + lookahead
-        )
+        _future_point, future_tangent, _future_normal = self.track.sample_at(progress + lookahead)
         heading = np.arctan2(tangent[1], tangent[0])
         future_heading = np.arctan2(future_tangent[1], future_tangent[0])
         return float(wrap_angle(future_heading - heading) / lookahead)

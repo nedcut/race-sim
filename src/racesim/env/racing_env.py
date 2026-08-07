@@ -12,6 +12,7 @@ import yaml
 from gymnasium import spaces
 
 from racesim.env.track import ClosedTrack
+from racesim.paths import default_env_config, project_root, resolve_resource
 from racesim.utils.geometry import wrap_angle
 
 
@@ -138,18 +139,18 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
 
     def __init__(
         self,
-        config_path: str | Path = "configs/env.yaml",
+        config_path: str | Path | None = None,
         *,
         render_mode: str | None = None,
     ) -> None:
         super().__init__()
-        self.config_path = Path(config_path)
+        resolved = default_env_config() if config_path is None else resolve_resource(config_path)
+        self.config_path = resolved
         self.config = self._load_config(self.config_path)
-        root = (
-            self.config_path.parent.parent
-            if self.config_path.parent.name == "configs"
-            else Path(".")
-        )
+        if self.config_path.parent.name == "configs":
+            root = self.config_path.parent.parent
+        else:
+            root = project_root()
 
         track_path = self._resolve_path(self.config["track"], root)
         model_path = self._resolve_path(self.config["model"]["xml"], root)
@@ -325,6 +326,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             )
         ):
             mujoco.mj_setConst(self.model, self.data)
+
     def reset(
         self,
         *,
@@ -530,8 +532,10 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         brake_direction = np.sign(forward_speed) if abs(forward_speed) > 0.1 else 0.0
         brake_force = brake * self.control.max_brake_force * brake_direction
         drag_force = (
-            self.control.linear_drag + self.tire_model.aero_drag_coefficient
-        ) * forward_speed * abs(forward_speed)
+            (self.control.linear_drag + self.tire_model.aero_drag_coefficient)
+            * forward_speed
+            * abs(forward_speed)
+        )
         rolling_direction = np.sign(forward_speed) if abs(forward_speed) > 0.1 else 0.0
         rolling_force = self.control.rolling_resistance * rolling_direction
 
@@ -543,9 +547,9 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         rear_forward_force = drive_force * rear_drive_fraction - brake_force * rear_brake_fraction
 
         mass = self._vehicle_mass()
-        longitudinal_acceleration = (
-            drive_force - brake_force - drag_force - rolling_force
-        ) / max(mass, 1e-9)
+        longitudinal_acceleration = (drive_force - brake_force - drag_force - rolling_force) / max(
+            mass, 1e-9
+        )
         normal_loads = self._axle_normal_loads(longitudinal_acceleration, abs(forward_speed))
         front_lateral_limit, rear_lateral_limit = self._axle_tire_limits(normal_loads)
         front_tire = self._tire_forces(
@@ -567,10 +571,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             np.cos(steer_angle) * forward + np.sin(steer_angle) * lateral
         )
 
-        front_force = (
-            front_tire.longitudinal * front_direction
-            + front_tire.lateral * lateral
-        )
+        front_force = front_tire.longitudinal * front_direction + front_tire.lateral * lateral
         rear_force = rear_tire.longitudinal * forward + rear_tire.lateral * lateral
         force = front_force + rear_force - (drag_force + rolling_force) * forward
         yaw_torque = (
@@ -703,10 +704,9 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             return 0.0, 0.0, 0.0
 
         exponent = max(self.tire_model.combined_slip_exponent, 1.0)
-        usage = (
-            (abs(longitudinal_force) / force_limit) ** exponent
-            + (abs(lateral_force) / force_limit) ** exponent
-        )
+        usage = (abs(longitudinal_force) / force_limit) ** exponent + (
+            abs(lateral_force) / force_limit
+        ) ** exponent
         if usage <= 1.0:
             return longitudinal_force, lateral_force, usage ** (1.0 / exponent)
 
@@ -771,10 +771,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         return features
 
     def _lookup_target_speed(self, progress: float) -> float:
-        if (
-            self._cached_target_speed is not None
-            and self._cached_target_speed[0] == progress
-        ):
+        if self._cached_target_speed is not None and self._cached_target_speed[0] == progress:
             return self._cached_target_speed[1]
         return self._target_speed(progress)
 
@@ -890,9 +887,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             "yaw_torque": tire.yaw_torque,
             "steering_angle": tire.steering_angle,
             "understeer_score": tire.understeer_score,
-            "off_track": self.track.is_off_track(
-                pose[:2], margin=self.off_track_margin
-            ),
+            "off_track": self.track.is_off_track(pose[:2], margin=self.off_track_margin),
             "lap_complete": self._lap_complete(),
             "no_progress_timeout": self._no_progress_timeout_info(),
             "reward_terms": reward_terms,

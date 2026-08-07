@@ -172,9 +172,7 @@ def test_higher_mass_slows_acceleration(tmp_path: Path) -> None:
         env.reset(seed=0, options={"initial_speed": 2.0})
         info = {}
         for _ in range(30):
-            _obs, _rew, _term, _trunc, info = env.step(
-                np.array([0.0, 1.0, 0.0], dtype=np.float32)
-            )
+            _obs, _rew, _term, _trunc, info = env.step(np.array([0.0, 1.0, 0.0], dtype=np.float32))
         return float(info["speed"])
 
     assert final_speed(light) > final_speed(heavy)
@@ -193,9 +191,7 @@ def test_aero_drag_reduces_terminal_speed() -> None:
         env.reset(seed=0, options={"initial_speed": 5.0})
         info = {}
         for _ in range(50):
-            _obs, _rew, _term, _trunc, info = env.step(
-                np.array([0.0, 1.0, 0.0], dtype=np.float32)
-            )
+            _obs, _rew, _term, _trunc, info = env.step(np.array([0.0, 1.0, 0.0], dtype=np.float32))
         return float(info["speed"])
 
     assert peak_speed(0.0) > peak_speed(12.0)

@@ -1,27 +1,27 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import gymnasium as gym
 import numpy as np
 import pytest
 
 import racesim  # noqa: F401
 from racesim.env.registration import ENV_ID, make_race_sim_env, resolve_env_config
+from racesim.paths import default_env_config, resolve_resource
 
 
 def test_resolve_env_config_defaults() -> None:
-    assert resolve_env_config() == Path("configs/env.yaml")
+    assert resolve_env_config() == default_env_config()
+    assert resolve_env_config().name == "env.yaml"
 
 
 def test_resolve_env_config_from_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RACESIM_CONFIG", "configs/env_s_curve.yaml")
-    assert resolve_env_config() == Path("configs/env_s_curve.yaml")
+    assert resolve_env_config() == resolve_resource("configs/env_s_curve.yaml")
 
 
 def test_resolve_env_config_kwargs_override_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RACESIM_CONFIG", "configs/env_s_curve.yaml")
-    assert resolve_env_config(config="configs/env_hairpin.yaml") == Path(
+    assert resolve_env_config(config="configs/env_hairpin.yaml") == resolve_resource(
         "configs/env_hairpin.yaml"
     )
 
@@ -53,5 +53,6 @@ def test_make_race_sim_env_factory() -> None:
 
 def test_import_racesim_registers_env() -> None:
     assert racesim.__version__
+    assert racesim.__version__ == "0.2.0"
     spec = gym.spec(ENV_ID)
     assert spec.id == ENV_ID

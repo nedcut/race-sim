@@ -124,8 +124,7 @@ class ClosedTrack:
         normal = self.normals[index]
         lateral_error = float(np.dot(point - nearest, normal))
         progress = float(
-            (self.arc_lengths[index] + fractions[index] * self.segment_lengths[index])
-            % self.length
+            (self.arc_lengths[index] + fractions[index] * self.segment_lengths[index]) % self.length
         )
 
         heading_error = None
@@ -188,9 +187,7 @@ class ClosedTrack:
                         curve=curve_name,
                         segment_index=index,
                         other_segment_index=other_index,
-                        message=(
-                            f"{curve_name} segments {index} and {other_index} intersect"
-                        ),
+                        message=(f"{curve_name} segments {index} and {other_index} intersect"),
                     )
                 )
         return issues
@@ -382,8 +379,7 @@ def segments_intersect(
     if abs(third_orientation) <= 1e-9 and _point_on_segment(second_start, second_end, first_start):
         return True
     return bool(
-        abs(fourth_orientation) <= 1e-9
-        and _point_on_segment(second_start, second_end, first_end)
+        abs(fourth_orientation) <= 1e-9 and _point_on_segment(second_start, second_end, first_end)
     )
 
 

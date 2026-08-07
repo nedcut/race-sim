@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 from racesim.env.racing_env import RacingEnv
+from racesim.paths import default_benchmark_pad_config, resolve_resource
 
 BenchmarkName = str
 
@@ -23,21 +24,21 @@ DEFAULT_BENCHMARKS: tuple[BenchmarkName, ...] = (
     "repeatability",
 )
 
-BENCHMARK_PAD_CONFIG = Path("configs/env_benchmark_pad.yaml")
-FALLBACK_PHYSICS_CONFIG = Path("configs/env.yaml")
-
 
 def default_physics_config() -> Path:
     """Prefer the wide open-loop pad when present; keep oval env as fallback."""
-    if BENCHMARK_PAD_CONFIG.exists():
-        return BENCHMARK_PAD_CONFIG
-    return FALLBACK_PHYSICS_CONFIG
+    return default_benchmark_pad_config()
 
 
 def resolve_physics_config(config_path: str | Path | None = None) -> Path:
     if config_path is None:
         return default_physics_config()
-    return Path(config_path)
+    return resolve_resource(config_path)
+
+
+# Public names kept for tests and suite tooling.
+BENCHMARK_PAD_CONFIG = Path("configs/env_benchmark_pad.yaml")
+FALLBACK_PHYSICS_CONFIG = Path("configs/env.yaml")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -745,9 +746,7 @@ def soft_range_flags(
             continue
         number = float(value)
         if number < low or number > high:
-            flags.append(
-                f"{benchmark} {metric} {number:.3f} outside [{low:.3f}, {high:.3f}]"
-            )
+            flags.append(f"{benchmark} {metric} {number:.3f} outside [{low:.3f}, {high:.3f}]")
     return flags
 
 

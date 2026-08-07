@@ -17,8 +17,15 @@ uv sync --extra dev --extra rl
 Sanity check:
 
 ```bash
-racesim-doctor
+racesim doctor
+# or: racesim-doctor
 pytest
+```
+
+If you need tools from outside the repo checkout, set:
+
+```bash
+export RACESIM_ROOT=/path/to/race-sim
 ```
 
 ## Repository working directory

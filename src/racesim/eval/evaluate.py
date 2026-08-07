@@ -12,6 +12,7 @@ from racesim.controllers.factory import CONTROLLERS, make_controller
 from racesim.env.racing_env import RacingEnv
 from racesim.eval.metrics import EpisodeMetrics, path_error_metrics, summarize_episodes
 from racesim.eval.telemetry import telemetry_row
+from racesim.paths import default_env_config
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -62,7 +63,7 @@ def main(argv: list[str] | None = None) -> None:
         )
     else:
         result = evaluate(
-            config_path=args.config or Path("configs/env.yaml"),
+            config_path=args.config or default_env_config(),
             controller_name=args.controller or "centerline",
             episodes=args.episodes if args.episodes is not None else 5,
             max_steps=args.max_steps,
