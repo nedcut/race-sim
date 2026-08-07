@@ -1,0 +1,9 @@
+name: benchmark_pad
+kind: rounded_rectangle
+# Large, wide pad for open-loop physics maneuvers that leave the racing line.
+length: 400.0
+height: 200.0
+radius: 80.0
+width: 120.0
+samples_per_corner: 24
+samples_per_straight: 40

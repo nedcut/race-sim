@@ -1,6 +1,7 @@
 # Track Catalog
 
 - `oval`: easy rounded rectangle for initial debugging.
+- `benchmark_pad`: very large, wide rounded rectangle for open-loop physics benchmarks (not a catalog race track).
 - `s_curve`: alternating medium-speed bends.
 - `kidney`: asymmetric loop with mixed-radius corners.
 - `chicane`: tests rapid direction changes.

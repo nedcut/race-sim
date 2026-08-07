@@ -1,8 +1,12 @@
+# Multi-seed controller evaluation (racesim-evaluate --eval-config configs/eval.yaml).
+# Controllers not registered as on-board policies are skipped;
+# use racesim-evaluate-policy for saved PPO artifacts.
 env_config: configs/env.yaml
 controllers:
   - heuristic
-  - ppo
-episodes: 20
+  - racing_line
+  - centerline
+episodes: 5
 seeds: [0, 1, 2, 3, 4]
 metrics:
   - completion_rate

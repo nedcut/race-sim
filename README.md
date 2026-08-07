@@ -76,7 +76,10 @@ racesim-compare-rollouts --input results/eval_centerline_trajectory.json results
 racesim-sweep-vehicle --episodes 3
 racesim-smoke-tracks --controller racing_line --steps 1200 --output results/track_smoke.csv
 racesim-physics-benchmarks --output results/physics_benchmarks.json
+racesim-physics-benchmarks --enforce  # exit 1 if sanity_flags non-empty
+racesim-evaluate --eval-config configs/eval.yaml --max-steps 3000 --output results/eval_multi_seed.json
 racesim-eval-suite --output results/baselines.md
+racesim-eval-suite --quick --output results/baselines_quick.md
 racesim-render-rollout --controller heuristic --steps 1800
 racesim-make-track-visual --track configs/tracks/technical.yaml --output assets/mjcf/technical_track.xml --model-name technical_track_visuals
 racesim-keyboard-drive
@@ -140,9 +143,27 @@ The rollout plotting command produces:
 
 The vehicle sweep compares `rwd`, `fwd`, and `awd` under low/nominal/high grip scales and writes CSV/JSON summaries to `results/`.
 
-The physics benchmark command runs deterministic open-loop acceleration, braking, steady-turning, skidpad, step-steer, slalom, braking-turn, throttle-exit, and repeatability checks. These are telemetry baselines rather than claims of real vehicle fidelity.
+The physics benchmark command runs deterministic open-loop acceleration, braking, steady-turning, skidpad, step-steer, slalom, braking-turn, throttle-exit, and repeatability checks. By default it uses the wide `configs/env_benchmark_pad.yaml` pad (override with `--config`). These are telemetry baselines rather than claims of real vehicle fidelity; pass `--enforce` to fail when `sanity_flags` are non-empty.
 
 The eval suite command runs tests, lint, catalog validation, controller smoke tests, default controller evals, physics telemetry, and the saved PPO policy matrix when the model artifact is present. It writes the tracked baseline report at [results/baselines.md](results/baselines.md).
+
+### Quick suite (`--quick`)
+
+For a sub-~2 minute local check (lint + track validation + short physics pad + short racing-line eval; skips full pytest, catalog smoke, and PPO policy matrix):
+
+```bash
+racesim-eval-suite --quick --output results/baselines_quick.md
+# equivalent:
+racesim-eval-suite --profile quick --output results/baselines_quick.md
+```
+
+CI (`.github/workflows/ci.yml`) runs ruff, pytest, track validation, MuJoCo smoke, and a short racing-line evaluate on pushes/PRs to `main`.
+
+Multi-seed controller evaluation is configured in [configs/eval.yaml](configs/eval.yaml):
+
+```bash
+racesim-evaluate --eval-config configs/eval.yaml --output results/eval_multi_seed.json
+```
 
 The comparison plotting command overlays recorded controller trajectories and writes a compact summary table. The technical, street-circuit, grand-prix, kartplex, and endurance layouts are useful held-out challenge cases for controllers and learned policies.
 
