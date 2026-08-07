@@ -10,4 +10,9 @@ build/
 results/*
 !results/.gitkeep
 !results/baselines.md
+# Keep tracked demo checkpoints under artifacts/; ignore other local artifacts.
+artifacts/*
+!artifacts/.gitkeep
+!artifacts/README.md
+!artifacts/*.zip
 notebooks/.ipynb_checkpoints/
