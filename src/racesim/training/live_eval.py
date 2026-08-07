@@ -13,7 +13,7 @@ except ImportError:  # pragma: no cover - optional [rl] extra
 
 from racesim.env.racing_env import RacingEnv
 from racesim.eval.evaluate import telemetry_row
-from racesim.eval.metrics import EpisodeMetrics, summarize_episodes
+from racesim.eval.metrics import EpisodeMetrics, path_error_metrics, summarize_episodes
 
 
 class LiveEvalCallback(BaseCallback):
@@ -98,11 +98,17 @@ def run_live_eval(
         total_reward = 0.0
         trajectory = []
         steps = 0
+        lateral_errors: list[float] = []
+        heading_errors: list[float] = []
+        speeds: list[float] = []
         for steps in range(1, max_steps + 1):
             action, _state = model.predict(observation, deterministic=deterministic)
             observation, reward, terminated, truncated, info = env.step(action)
             total_reward += reward
-            sim_time = steps * env.frame_skip * env.model.opt.timestep
+            lateral_errors.append(float(info["lateral_error"]))
+            heading_errors.append(float(info["heading_error"] or 0.0))
+            speeds.append(float(info["speed"]))
+            sim_time = steps * env.control_timestep()
             trajectory.append(
                 telemetry_row(
                     steps,
@@ -117,16 +123,18 @@ def run_live_eval(
             if terminated or truncated:
                 break
 
+        path = path_error_metrics(lateral_errors, heading_errors, speeds)
         metrics = EpisodeMetrics(
             episode=episode,
             seed=episode,
             steps=steps,
-            sim_time=float(steps * env.frame_skip * env.model.opt.timestep),
+            sim_time=float(steps * env.control_timestep()),
             total_reward=float(total_reward),
             lap_complete=bool(info["lap_complete"]),
             off_track=bool(info["off_track"]),
             lap_fraction=float(info["lap_fraction"]),
             cumulative_lap_fraction=float(info["cumulative_lap_fraction"]),
+            **path,
         )
         episode_results.append({"metrics": metrics, "trajectory": trajectory})
 

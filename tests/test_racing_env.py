@@ -102,3 +102,14 @@ def test_progress_delta_is_capped_by_physical_motion() -> None:
     assert progress_delta == env.termination_config.max_progress_delta_factor + (
         env.termination_config.max_progress_delta_slack
     )
+
+
+def test_rgb_array_render_returns_uint8_image() -> None:
+    env = RacingEnv("configs/env.yaml", render_mode="rgb_array")
+    env.reset(seed=0)
+    frame = env.render()
+    assert frame is not None
+    assert frame.dtype == np.uint8
+    assert frame.ndim == 3
+    assert frame.shape[2] == 3
+    env.close()

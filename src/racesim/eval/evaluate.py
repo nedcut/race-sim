@@ -10,7 +10,7 @@ import yaml
 
 from racesim.controllers.factory import CONTROLLERS, make_controller
 from racesim.env.racing_env import RacingEnv
-from racesim.eval.metrics import EpisodeMetrics, summarize_episodes
+from racesim.eval.metrics import EpisodeMetrics, path_error_metrics, summarize_episodes
 from racesim.eval.telemetry import telemetry_row
 
 
@@ -212,6 +212,9 @@ def run_episode(
     total_reward = 0.0
     steps = 0
     trajectory = []
+    lateral_errors: list[float] = []
+    heading_errors: list[float] = []
+    speeds: list[float] = []
 
     for _step in range(max_steps):
         action = controller.act(observation, info)
@@ -219,8 +222,11 @@ def run_episode(
         observation, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
         steps += 1
+        lateral_errors.append(float(info["lateral_error"]))
+        heading_errors.append(float(info["heading_error"] or 0.0))
+        speeds.append(float(info["speed"]))
         if record_trajectory:
-            sim_time = steps * env.frame_skip * env.model.opt.timestep
+            sim_time = steps * env.control_timestep()
             trajectory.append(
                 telemetry_row(
                     steps,
@@ -235,7 +241,8 @@ def run_episode(
         if terminated or truncated:
             break
 
-    sim_time = steps * env.frame_skip * env.model.opt.timestep
+    sim_time = steps * env.control_timestep()
+    path = path_error_metrics(lateral_errors, heading_errors, speeds)
     return {
         "metrics": EpisodeMetrics(
             episode=episode,
@@ -247,6 +254,7 @@ def run_episode(
             off_track=bool(info["off_track"]),
             lap_fraction=float(info["lap_fraction"]),
             cumulative_lap_fraction=float(info["cumulative_lap_fraction"]),
+            **path,
         ),
         "trajectory": trajectory,
     }

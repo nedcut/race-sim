@@ -141,15 +141,12 @@ def main() -> None:
             now = time.monotonic()
             if now >= next_print:
                 mode = controller_name if state["autopilot"] else "manual"
-                print(
-                    f"{mode} action={np.asarray(action).round(2)} "
-                    f"speed={info['speed']:.2f}m/s lat={info['lateral_error']:.2f}m "
-                    f"lap={info['cumulative_lap_fraction']:.2f} camera={state['camera']}"
-                )
+                print(format_hud_status(info, action, mode, state["camera"]))
                 next_print = now + 1.0
 
+            update_viewer_hud(viewer, env, hud_fields(info, action))
             viewer.sync()
-            time.sleep(env.frame_skip * env.model.opt.timestep)
+            time.sleep(env.control_timestep())
 
         viewer.close()
 
@@ -176,6 +173,73 @@ class PolicyDriver:
         del info
         action, _state = self.model.predict(observation, deterministic=self.deterministic)
         return np.asarray(action, dtype=np.float32)
+
+
+def hud_fields(info: dict[str, Any], action: np.ndarray) -> dict[str, float | str]:
+    action = np.asarray(action, dtype=float)
+    tire = info.get("tire_usage", {})
+    peak_tire = max(float(tire.get("front", 0.0)), float(tire.get("rear", 0.0)))
+    return {
+        "speed": float(info["speed"]),
+        "lateral_error": float(info["lateral_error"]),
+        "heading_error": float(info["heading_error"] or 0.0),
+        "lap": float(info["cumulative_lap_fraction"]),
+        "target_speed": float(info.get("target_speed", 0.0)),
+        "peak_tire_usage": peak_tire,
+        "steering": float(action[0]),
+        "throttle": float(action[1]),
+        "brake": float(action[2]),
+    }
+
+
+def format_hud_status(
+    info: dict[str, Any],
+    action: np.ndarray,
+    mode: str,
+    camera: str,
+) -> str:
+    fields = hud_fields(info, action)
+    return (
+        f"{mode} camera={camera} "
+        f"spd={fields['speed']:.2f}m/s tgt={fields['target_speed']:.1f} "
+        f"lat={fields['lateral_error']:.2f}m head={fields['heading_error']:.2f} "
+        f"lap={fields['lap']:.2f} tire={fields['peak_tire_usage']:.2f} "
+        f"act=[{fields['steering']:.2f},{fields['throttle']:.2f},{fields['brake']:.2f}]"
+    )
+
+
+def update_viewer_hud(viewer: object, env: RacingEnv, fields: dict[str, float | str]) -> None:
+    """Draw a short lateral-error indicator toward the track centerline."""
+    del fields
+    if not hasattr(viewer, "user_scn"):
+        return
+    import mujoco
+
+    pose = env._pose()
+    projection = env.track.project(pose[:2], heading=pose[2])
+    point, _tangent, _normal = env.track.sample_at(projection.progress)
+    car = np.array([pose[0], pose[1], 0.35], dtype=float)
+    center = np.array([point[0], point[1], 0.35], dtype=float)
+    scn = viewer.user_scn
+    scn.ngeom = 0
+    if scn.ngeom >= scn.maxgeom:
+        return
+    mujoco.mjv_initGeom(
+        scn.geoms[scn.ngeom],
+        type=mujoco.mjtGeom.mjGEOM_LINE,
+        size=np.zeros(3),
+        pos=np.zeros(3),
+        mat=np.eye(3).flatten(),
+        rgba=np.array([0.2, 0.9, 0.3, 0.8], dtype=np.float32),
+    )
+    mujoco.mjv_connector(
+        scn.geoms[scn.ngeom],
+        type=mujoco.mjtGeom.mjGEOM_LINE,
+        width=0.02,
+        from_=car,
+        to=center,
+    )
+    scn.ngeom += 1
 
 
 def apply_viewer_camera(viewer: object, env: RacingEnv, camera_name: str) -> None:

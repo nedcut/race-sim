@@ -11,6 +11,8 @@ from racesim.env.racing_env import RacingEnv
 from racesim.scripts.keyboard_drive import (
     PolicyDriver,
     apply_viewer_camera,
+    format_hud_status,
+    hud_fields,
     make_autopilot,
     maybe_reexec_with_mjpython,
 )
@@ -79,3 +81,20 @@ def test_apply_viewer_camera_can_reset_free_camera() -> None:
 
     assert viewer.cam.type == mujoco.mjtCamera.mjCAMERA_FREE
     assert viewer.cam.distance == 95.0
+
+
+def test_format_hud_status_includes_telemetry_fields() -> None:
+    info = {
+        "speed": 8.5,
+        "lateral_error": -0.4,
+        "heading_error": 0.2,
+        "cumulative_lap_fraction": 0.3,
+        "target_speed": 7.0,
+        "tire_usage": {"front": 0.5, "rear": 0.7},
+    }
+    text = format_hud_status(info, np.array([0.1, 0.5, 0.0]), "manual", "chase")
+    assert "spd=8.50" in text
+    assert "lat=-0.40" in text
+    assert "tire=0.70" in text
+    fields = hud_fields(info, np.array([0.1, 0.5, 0.0]))
+    assert fields["peak_tire_usage"] == 0.7

@@ -42,11 +42,20 @@ class TireModelConfig:
     combined_slip_exponent: float = 2.0
     brake_front_bias: float = 0.6
     aero_downforce_coefficient: float = 0.0
+    aero_drag_coefficient: float = 0.0
     aero_front_balance: float = 0.5
     peak_slip_angle: float = 0.12
     lateral_saturation_softness: float = 1.15
     longitudinal_saturation_softness: float = 1.0
     low_speed_slip_floor: float = 1.2
+
+
+@dataclass(frozen=True)
+class ChassisConfig:
+    mass_kg: float | None = None
+    ixx: float | None = None
+    iyy: float | None = None
+    izz: float | None = None
 
 
 @dataclass(frozen=True)
@@ -125,9 +134,14 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
     bicycle-style proxy with axle loads and combined tire limits.
     """
 
-    metadata = {"render_modes": []}
+    metadata = {"render_modes": ["rgb_array", "human"], "render_fps": 12}
 
-    def __init__(self, config_path: str | Path = "configs/env.yaml") -> None:
+    def __init__(
+        self,
+        config_path: str | Path = "configs/env.yaml",
+        *,
+        render_mode: str | None = None,
+    ) -> None:
         super().__init__()
         self.config_path = Path(config_path)
         self.config = self._load_config(self.config_path)
@@ -153,9 +167,23 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.max_episode_steps = int(sim_config.get("max_episode_steps", 3000))
         self.initial_speed = float(sim_config.get("initial_speed", 0.0))
         self.lap_target = float(sim_config.get("lap_target", 1.0))
+        if "dt" in sim_config:
+            self.model.opt.timestep = float(sim_config["dt"])
+
+        render_config = self.config.get("render", {})
+        self.render_mode = render_mode if render_mode is not None else render_config.get("mode")
+        self._render_width = int(render_config.get("width", 640))
+        self._render_height = int(render_config.get("height", 480))
+        self._renderer: mujoco.Renderer | None = None
+        self.metadata = {
+            "render_modes": ["rgb_array", "human"],
+            "render_fps": max(1, int(round(1.0 / max(self.control_timestep(), 1e-6)))),
+        }
 
         self.control = self._load_control_config(root)
         self.tire_model = self._load_tire_model_config(root)
+        self.chassis = self._load_chassis_config(root)
+        self._apply_chassis_overrides()
         self.reward_config = RewardConfig(**self.config.get("reward", {}))
         self.termination_config = TerminationConfig(**self.config.get("termination", {}))
         self.observation_config = ObservationConfig(**self.config.get("observation", {}))
@@ -188,6 +216,36 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.next_progress_gate = 0.0
         self.progress_history: deque[tuple[int, float]] = deque()
         self._cached_target_speed: tuple[float, float] | None = None
+
+    def control_timestep(self) -> float:
+        """Wall-clock seconds between successive env.step() transitions."""
+        return float(self.frame_skip * self.model.opt.timestep)
+
+    def render(self) -> np.ndarray | None:
+        if self.render_mode is None or self.render_mode == "human":
+            return None
+        if self.render_mode != "rgb_array":
+            raise ValueError(f"Unsupported render_mode: {self.render_mode}")
+
+        if self._renderer is None:
+            self._renderer = mujoco.Renderer(
+                self.model, height=self._render_height, width=self._render_width
+            )
+
+        camera = "topdown"
+        camera_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, camera)
+        if camera_id < 0:
+            self._renderer.update_scene(self.data)
+        else:
+            self._renderer.update_scene(self.data, camera=camera)
+        pixels = self._renderer.render()
+        return np.asarray(pixels, dtype=np.uint8)
+
+    def close(self) -> None:
+        if self._renderer is not None:
+            self._renderer.close()
+            self._renderer = None
+        super().close()
 
     @staticmethod
     def _load_config(path: Path) -> dict[str, Any]:
@@ -234,6 +292,39 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             **{key: value for key, value in tire_model_config.items() if key in tire_model_fields}
         )
 
+    def _load_chassis_config(self, root: Path) -> ChassisConfig:
+        chassis_config: dict[str, Any] = {}
+        vehicle_path = self.config.get("vehicle")
+        if vehicle_path is not None:
+            vehicle_config = self._load_config(self._resolve_path(vehicle_path, root))
+            chassis_config.update(vehicle_config.get("chassis", {}))
+        chassis_config.update(self.config.get("chassis", {}))
+        chassis_fields = {field.name for field in fields(ChassisConfig)}
+        return ChassisConfig(
+            **{key: value for key, value in chassis_config.items() if key in chassis_fields}
+        )
+
+    def _apply_chassis_overrides(self) -> None:
+        if self.chassis.mass_kg is not None:
+            self.model.body_mass[self.car_body_id] = float(self.chassis.mass_kg)
+        inertia = self.model.body_inertia[self.car_body_id].copy()
+        if self.chassis.ixx is not None:
+            inertia[0] = float(self.chassis.ixx)
+        if self.chassis.iyy is not None:
+            inertia[1] = float(self.chassis.iyy)
+        if self.chassis.izz is not None:
+            inertia[2] = float(self.chassis.izz)
+        self.model.body_inertia[self.car_body_id] = inertia
+        if any(
+            value is not None
+            for value in (
+                self.chassis.mass_kg,
+                self.chassis.ixx,
+                self.chassis.iyy,
+                self.chassis.izz,
+            )
+        ):
+            mujoco.mj_setConst(self.model, self.data)
     def reset(
         self,
         *,
@@ -438,7 +529,9 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         drive_force = throttle * self.control.max_drive_force
         brake_direction = np.sign(forward_speed) if abs(forward_speed) > 0.1 else 0.0
         brake_force = brake * self.control.max_brake_force * brake_direction
-        drag_force = self.control.linear_drag * forward_speed * abs(forward_speed)
+        drag_force = (
+            self.control.linear_drag + self.tire_model.aero_drag_coefficient
+        ) * forward_speed * abs(forward_speed)
         rolling_direction = np.sign(forward_speed) if abs(forward_speed) > 0.1 else 0.0
         rolling_force = self.control.rolling_resistance * rolling_direction
 
