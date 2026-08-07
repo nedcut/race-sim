@@ -15,7 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `py.typed` for typed installs
 - Professional package metadata (classifiers, URLs, license, keywords)
 - CONTRIBUTING guide and this changelog
-- CI matrix (Python 3.11/3.12), ruff format check, and package build verification
 
 ### Changed
 - Version bump from 0.1.0 research scaffold to 0.2.0 toolkit release

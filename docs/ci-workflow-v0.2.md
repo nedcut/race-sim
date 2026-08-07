@@ -1,0 +1,62 @@
+# Recommended CI workflow (v0.2)
+
+GitHub App tokens in this environment cannot push workflow file changes.
+Apply this content to `.github/workflows/ci.yml` on main when you have
+`workflow` scope (e.g. via GitHub UI or a PAT with workflows permission).
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package
+        run: pip install -e ".[dev]"
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format
+        run: ruff format --check .
+
+      - name: Pytest
+        run: pytest -q
+
+      - name: Validate tracks
+        run: racesim validate-tracks --
+
+      - name: Unified CLI smoke
+        run: |
+          racesim version
+          racesim doctor
+          racesim-smoke-mujoco
+          racesim evaluate -- --controller racing_line --episodes 1 --max-steps 80 --output results/ci_eval_smoke.json
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Install wheel (sanity)
+        run: |
+          pip install dist/*.whl
+          python -c "import racesim; import gymnasium as gym; e=gym.make('RaceSim-v0'); e.reset(seed=0); e.close(); print(racesim.__version__)"
+```
