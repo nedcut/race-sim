@@ -8,7 +8,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-
 MIN_PYTHON = (3, 11)
 REQUIRED_MODULES = ("gymnasium", "mujoco", "numpy", "yaml")
 OPTIONAL_RL_MODULES = ("stable_baselines3", "torch")
@@ -86,7 +85,12 @@ def check_optional_rl(modules: tuple[str, ...] = OPTIONAL_RL_MODULES) -> list[Ch
     for name in modules:
         if module_available(name):
             results.append(
-                CheckResult(f"optional:{name}", True, f"{name} available (RL extra)", critical=False)
+                CheckResult(
+                    f"optional:{name}",
+                    True,
+                    f"{name} available (RL extra)",
+                    critical=False,
+                )
             )
         else:
             results.append(
