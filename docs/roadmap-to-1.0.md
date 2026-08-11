@@ -291,7 +291,7 @@ the result screen.
 
 ## Explicit non-goals before 1.0
 
-Defer unless something becomes unblockers:
+Defer unless something becomes a blocker:
 
 | Item | Why wait |
 |------|----------|
@@ -301,6 +301,9 @@ Defer unless something becomes unblockers:
 | Weather / fuel / full strategy stack | Nice-to-have after racing basics |
 | Photoreal rendering | MuJoCo + clean HUD is fine |
 | Huge track catalog | Prefer 2–3 great racing tracks |
+
+Deferred ≠ unplanned: [dynamics-roadmap.md](dynamics-roadmap.md) holds the technical path
+for the tire and contact work above. This document decides when it is worth starting.
 
 ---
 
