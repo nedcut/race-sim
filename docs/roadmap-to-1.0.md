@@ -27,8 +27,19 @@ Not the goal (for 1.0): F1-grade tires, full multi-surface µ, or publisher sim 
 1. **Payoff first.** Every phase should move “I want to race an agent this weekend” closer, not only training curves.
 2. **Physics good enough.** Harden and characterize the proxy; defer Pacejka / wheel-contact until racing is fun.
 3. **Ghosts before collisions.** Multi-car awareness and line choice beat perfect contact before the contact model is real.
-4. **One agent API.** Same observations/actions for human, heuristic, and learned policies.
+4. **One driver contract.** Human, heuristic, and learned drivers share the same action
+   output and lifecycle. Recorded ghosts use a separate time-indexed replay contract.
 5. **Ship milestones as playable demos**, not only YAMLs and eval JSON.
+
+### Evidence rule for every phase
+
+Before implementation starts, land a versioned acceptance fixture (for example,
+`configs/acceptance/v0.4.yaml`) that freezes the exact track and vehicle config,
+controller or agent-bundle digests, seed list, sample count, metrics, and numeric pass
+thresholds. Performance fixtures also name the reference hardware. Human-play phases
+freeze the participant count, task script, time limit, and pass threshold. Closing a
+phase requires machine-readable results (plus the short human-test summary when
+applicable) linked from the changelog; checklist boxes alone are not evidence.
 
 ---
 
@@ -45,7 +56,8 @@ Not the goal (for 1.0): F1-grade tires, full multi-surface µ, or publisher sim 
 | **0.9** | Polish / reliability | Suite, camera, feel, docs, fewer sharp edges |
 | **1.0** | Race day | Invite a friend: “beat this agent in a 3-lap race” |
 
-Versions are planning labels; merge when the phase checklist is done enough to feel true.
+Versions are SemVer milestones, not dates. Tag one only after its checklist and frozen
+acceptance fixture pass; unfinished work remains on the next pre-release version.
 
 ---
 
@@ -58,13 +70,19 @@ Versions are planning labels; merge when the phase checklist is done enough to f
 - [ ] Land quality training stack: VecNormalize, LR schedules, checkpoints, live eval
 - [ ] Optional expert collect + BC warm-start wired and documented
 - [ ] Quality env config (richer obs / shaped rewards) vs classic 19-D A/B path
+- [ ] Define a versioned agent bundle: policy, VecNormalize statistics when used,
+      environment/config fingerprint, observation schema version, and training metadata
+- [ ] Make train/eval/play commands load that bundle and fail clearly on incompatible
+      observation schemas or missing normalization state
 - [ ] Smoke train config that finishes in minutes on a laptop
 - [ ] `evaluate-policy` works with VecNormalize and multi-episode seeds
 - [ ] Docs: `docs/training.md` + README “how to train a baseline”
 - [ ] Tests for registration, obs dim, curriculum obs consistency
 - [ ] Tag / changelog **0.3.0** when branch is merge-ready
 
-**Exit test:** `racesim train -- --config configs/train_ppo_quality_smoke.yaml` + policy eval completes without hand-holding.
+**Exit test:** On the frozen 0.3 acceptance fixture, the smoke train and policy eval
+complete for every declared seed, produce a self-contained agent bundle, and reproduce
+the declared observation schema and metric thresholds with zero manual file wiring.
 
 ---
 
@@ -77,12 +95,14 @@ Versions are planning labels; merge when the phase checklist is done enough to f
 - [ ] Revisit keyboard mapping / hold-vs-toggle / rate limits so the car is learnable in 30s
 - [ ] Assist modes for humans: optional steering soft-centering, brake assist, speed cap for “fun mode”
 - [ ] Action smoothing / deadzones tuned separately for human vs RL if needed
-- [ ] Reset + restart hotkeys without restarting the process
-- [ ] On-screen or terminal HUD: speed, lap time, sector, off-track, last lap
+- [x] Existing foundation: `R` reset, terminal HUD, camera presets, and `H` autopilot toggle
+- [ ] Turn reset into a complete race-session restart without restarting the process
+- [ ] Expand the existing HUD with lap time, sector, off-track state, and last lap
 
 ### Camera & feedback
 
-- [ ] Stable chase / cockpit camera presets that work on macOS (`mjpython`)
+- [ ] Tune and validate the existing chase/top-down/free/fixed cameras on macOS
+      (`mjpython`); add cockpit only if it improves the play test
 - [ ] Clear off-track / wall feedback (flash / sound optional later)
 - [ ] Simple lap timer and best lap persistence (local file or results/)
 
@@ -92,7 +112,9 @@ Versions are planning labels; merge when the phase checklist is done enough to f
 - [ ] Document drive tips in getting-started (“if it feels floating / numb, use X config”)
 - [ ] Keep open-loop physics benchmarks green so feel tweaks don’t silently break CI
 
-**Exit test:** New player can complete one clean lap with keyboard, beat their own best lap on a second try, and say “that’s a game.”
+**Exit test:** Under the frozen 0.4 human-test script, at least 4 of 5 first-time
+players complete a clean lap within 10 minutes and at least 3 record a faster second
+clean lap without operator intervention.
 
 ---
 
@@ -102,23 +124,29 @@ Versions are planning labels; merge when the phase checklist is done enough to f
 
 ### World
 
-- [ ] Ghost car: visual + timing only (no collision), driven by recorded trajectory or live policy
+- [ ] Ghost car: visual + timing only (no collision), driven by a recorded,
+      time-indexed trajectory; live multi-body policies wait for Phase 3
 - [ ] Record best-lap / policy rollout as a replay asset (npz or trajectory npz)
-- [ ] Race session: N laps, start offset (pole vs chase), finish order by race time
-- [ ] Gap telemetry: delta to ghost (time + meters ahead/behind)
+- [ ] Race session: N laps and optional grid/chase offsets; one shared race clock drives
+      raw finish order, gap telemetry, and leaderboard output. Any handicap-adjusted
+      result is a separately labeled derived field and never replaces raw order.
+- [ ] Gap telemetry: delta to ghost (shared-clock time + meters ahead/behind)
 
 ### Agent plumbing
 
-- [ ] Common “controller” protocol: human | heuristic | SB3 policy | replay ghost
+- [ ] Common `Driver` protocol: human | heuristic | SB3 policy → normalized action
+- [ ] Separate `Replay` protocol: timestamp → recorded pose/timing state
 - [ ] `racesim race` (or similar) CLI: human vs ghost / policy vs ghost
-- [ ] Deterministic ghost seed so demos replay cleanly
+- [ ] Deterministic replay asset and clock so demos reproduce exactly
 
 ### Training still solo (but race-relevant)
 
 - [ ] Evaluate policies on **race time vs fixed ghost**, not only mean return
 - [ ] Leaderboard-ish JSON: track, vehicle, agent, best race gap
 
-**Exit test:** You race a ghost of `racing_line` or a trained PPO and either beat it or lose by a clear margin you can feel on track.
+**Exit test:** On the frozen 0.5 fixture, two runs of the same replay produce identical
+finish order and gap output; all five scripted human attempts complete with an explicit
+raw result, final time gap, and no timing ambiguity.
 
 ---
 
@@ -128,19 +156,24 @@ Versions are planning labels; merge when the phase checklist is done enough to f
 
 ### Simulation
 
-- [ ] N vehicles in one MuJoCo world (or composition of single agents with shared track state)
-- [ ] Collision / contact policy: start simple (soft repulsion or rigid body contact), then tighten
+- [ ] Record the 1.0 architecture decision before implementation: one shared MuJoCo
+      world; one Gym ego action; internal scripted/frozen opponent drivers; full
+      PettingZoo/multi-agent learning remains post-1.0
+- [ ] N vehicles in that shared MuJoCo world with stable per-car IDs/state
+- [ ] Start with deterministic soft contact/repulsion; consider rigid-body contact only
+      after the race-rule and stress fixtures pass
 - [ ] Shared track projection per car (progress, lateral, heading)
-- [ ] Spawn / grid start positions; pitlane optional/later
+- [ ] Spawn / grid start positions; pit lane optional/later
 - [ ] Episode / race termination: time limit, all finished, last car out
 
 ### Observations & API
 
 - [ ] Relative opponent features: Δprogress, Δlat, relative velocity, closest N cars
 - [ ] Mask/pad obs for variable N with fixed size for SB3
-- [ ] Gym API decision locked: PettingZoo vs single-agent ego + scripted others  
-  - **Recommended default for 1.0 fun:** single-agent **ego learns**, others scripted/frozen policies — simplest path to “race against agents”
-  - Multi-agent competitive train can wait until after ego-vs-bots is fun
+- [ ] Introduce a separately registered, versioned race environment/observation schema;
+      keep `RaceSim-v0` and its solo checkpoint contract compatible
+- [ ] Adapt validated solo agent bundles into frozen opponents without silently changing
+      their observation or normalization contract
 
 ### Safety & fairness
 
@@ -148,7 +181,9 @@ Versions are planning labels; merge when the phase checklist is done enough to f
 - [ ] No-ghost-block vs solid contact modes (config flag)
 - [ ] Stress tests: 4 cars, long race, no NaNs, FPS acceptable
 
-**Exit test:** 3 cars on track; ego can be blocked, re-pass, and finish under race rules without desync.
+**Exit test:** The frozen 0.6 stress fixture completes at least 20 seeded three-car
+races with zero NaNs, identity swaps, clock disagreements, or desync; it records at
+least one blocked-and-repassed event and meets the declared real-time-factor budget.
 
 ---
 
@@ -176,7 +211,11 @@ Versions are planning labels; merge when the phase checklist is done enough to f
 - [ ] Baseline with opponent features ON vs OFF (proves multi-car obs matters)
 - [ ] Minimal “awareness” feature set frozen in docs for reproducibility
 
-**Exit test:** Trained ego beats racing-line zombie in race rate > solo delta would suggest; bots create real traffic decisions (lift, wait, dive).
+**Exit test:** Across at least 100 seeded races on the frozen 0.7 track and bot set,
+the trained ego's 95% win-rate confidence interval has a lower bound above 50% versus
+the racing-line bot, while solo clean-lap rate falls by no more than 5 percentage
+points from the frozen 0.3 baseline. Incident and overtake counts are emitted for
+every race.
 
 ---
 
@@ -193,7 +232,7 @@ Versions are planning labels; merge when the phase checklist is done enough to f
 
 ### UX
 
-- [ ] One command: `racesim race-day --track … --opponent best_model.zip`
+- [ ] One command: `racesim race-day --track … --opponent <agent-bundle>`
 - [ ] Pre-race screen: controls, difficulty, track
 - [ ] Post-race summary: place, best lap, gaps, incidents
 - [ ] Optional third-person “broadcast” camera for watching agent-only races
@@ -205,7 +244,10 @@ Versions are planning labels; merge when the phase checklist is done enough to f
 - [ ] Optional human assists so novices can finish races
 - [ ] Optional agent speed scale / reaction delay for handicap
 
-**Exit test:** Cold start → install docs → race an agent in &lt;15 minutes and understand who won.
+**Exit test:** In the frozen 0.8 install test, at least 4 of 5 first-time users go from
+a clean environment to a completed agent race in under 15 minutes without operator
+intervention, and all five correctly identify place, elapsed time, and final gap from
+the result screen.
 
 ---
 
@@ -234,11 +276,16 @@ Versions are planning labels; merge when the phase checklist is done enough to f
 
 **Exit test (definition of 1.0):**
 
-1. Keyboard race is learnable and fun for several sessions.  
-2. At least one trained opponent creates competitive pack racing on a featured track.  
-3. A stranger following README can complete a human-vs-agent race.  
-4. Solo training still works (best lap path is preserved).  
-5. CI suite (incl. multi-car smoke) is green.
+1. The 0.4 first-time-player thresholds still pass on the release candidate.
+2. Across at least 100 frozen-seed races, one trained opponent beats the fixed bot set
+   with a 95% win-rate confidence interval whose lower bound exceeds 50%.
+3. Across at least 20 human races, the medium tier has a 25–75% human win rate, and
+   every result records finish order, gaps, and incidents.
+4. At least 4 of 5 strangers following the README complete a human-vs-agent race in
+   under 15 minutes without operator intervention.
+5. Solo evaluation remains within the frozen 0.3 regression thresholds.
+6. The multi-car stress and race-session smoke suites are green on the exact release
+   commit.
 
 ---
 
@@ -284,14 +331,17 @@ Rule of thumb: if a PR only improves tensorboard but not race day, it should sti
 
 ---
 
-## Open decisions (resolve when the phase starts)
+## Open decisions (resolve in the phase acceptance fixture)
 
 Record the choice here when made:
 
-1. **Multi-agent API:** PettingZoo multi-learn vs **ego + fixed opponents** (recommended for 1.0).  
-2. **Collision fidelity:** soft bubble first vs MuJoCo geom contact.  
-3. **Observation partial observability:** perfect state vs noise (partial obs can wait).  
-4. **Human interface:** MuJoCo viewer forever vs thin game window (viewer is OK for 1.0 if feel is good).  
+1. **Observation partial observability:** perfect state vs noise (partial obs can wait).
+2. **Human interface:** MuJoCo viewer forever vs thin game window (viewer is OK for
+   1.0 if the 0.8 human test passes).
+3. **Featured tracks:** choose the 2–3 release tracks before the 0.6 acceptance fixture
+   freezes racing geometry and passing zones.
+4. **Agent distribution:** checked-in small bundles vs release downloads, with digests
+   either way.
 
 ---
 
