@@ -3,6 +3,11 @@
 RaceSim uses a simplified bicycle force proxy. This document keeps the scope honest and
 maps a path for deeper vehicle models when they earn their place in the tool.
 
+It covers *what* deeper dynamics would take, not *when* to build them. Sequencing is
+governed by [roadmap-to-1.0.md](roadmap-to-1.0.md), which defers wheel-contact tire work
+until racing is fun — so treat everything under **Later** as post-1.0 unless that roadmap
+says otherwise.
+
 ## Now (shipping proxy)
 
 - Planar free-body chassis driven by `xfrc_applied` body forces

@@ -125,6 +125,7 @@ artifacts/       Optional demo checkpoints
 | [tracks.md](docs/tracks.md) | Track authoring |
 | [simulation.md](docs/simulation.md) | Physics model + trust boundary |
 | [dynamics-roadmap.md](docs/dynamics-roadmap.md) | Future dynamics work |
+| [roadmap-to-1.0.md](docs/roadmap-to-1.0.md) | Product path: fun manual + race vs agents |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev workflow |
 | [CHANGELOG.md](CHANGELOG.md) | Release notes |
 
