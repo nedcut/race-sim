@@ -72,7 +72,7 @@ All terms are **weights** unless noted. Per-step reward is the sum of:
 | `boundary_margin` | quadratic shortfall below margin start |
 | `boundary_margin_start` | margin distance (m) before shortfall grows |
 | `progress_gate` | bonus per ordered forward gate crossed |
-| `progress_gate_spacing` | gate spacing; `≤1` as lap fraction, else meters. A gate fires only when moving forward onto the next gate in order |
+| `progress_gate_spacing` | `(0, 1]` is a lap fraction, `> 1` is meters, `≤ 0` disables gates. A gate fires only when moving forward onto the next gate in order |
 | `speed_excess` | `× max(speed − target, 0)²` |
 | `target_speed_max` / `target_speed_min` | target speed clamp (m/s) |
 | `target_speed_curvature_gain` | map curvature → lower target speed |
