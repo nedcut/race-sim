@@ -55,8 +55,8 @@ class TrackCurriculumEnv(gym.Env[np.ndarray, np.ndarray]):
     ) -> tuple[np.ndarray, dict[str, Any]]:
         super().reset(seed=seed)
         if seed is not None:
-            for env in self.envs:
-                env.reset(seed=seed)
+            for index, env in enumerate(self.envs):
+                env.reset(seed=int(seed) + index + 1)
         self.current_index = int(self.np_random.choice(len(self.envs), p=self.probabilities))
         self.current_env = self.envs[self.current_index]
 
