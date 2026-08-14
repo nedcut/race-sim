@@ -15,41 +15,46 @@ def project_root() -> Path:
     """Return the workspace root or packaged data root for configs/assets.
 
     Resolution order:
-    1. ``RACESIM_ROOT`` environment variable
-    2. Walk upward from CWD for a directory containing ``configs/`` and ``assets/``
-    3. Walk upward from this package for a development checkout
-    4. Packaged ``racesim/_data`` directory (wheel installs)
+    1. ``RACESIM_ROOT`` if it is a strict RaceSim root
+    2. Walk upward from this package file (development checkout)
+    3. Packaged ``racesim/_data`` directory (wheel installs)
+    4. Current working directory only if it is a strict RaceSim root
+
+    A strict root contains ``configs/env.yaml`` and ``assets/mjcf/world.xml``,
+    not merely directories named ``configs`` and ``assets``.
     """
     env_root = os.environ.get("RACESIM_ROOT")
     if env_root:
         candidate = Path(env_root).expanduser().resolve()
-        if _looks_like_root(candidate):
+        if _is_strict_root(candidate):
             return candidate
 
-    for start in (Path.cwd(), Path(__file__).resolve().parent):
-        root = _find_root_upwards(start)
-        if root is not None:
-            return root
+    package_root = _find_root_upwards(Path(__file__).resolve().parent)
+    if package_root is not None:
+        return package_root
 
-    if _looks_like_root(_PACKAGE_DATA):
+    if _is_strict_root(_PACKAGE_DATA):
         return _PACKAGE_DATA
 
-    # Last resort for editable installs that still keep assets at repo root.
-    repo_from_src = Path(__file__).resolve().parents[2]
-    if _looks_like_root(repo_from_src):
-        return repo_from_src
+    cwd = Path.cwd().resolve()
+    if _is_strict_root(cwd):
+        return cwd
 
-    return Path.cwd()
+    if _PACKAGE_DATA.is_dir():
+        return _PACKAGE_DATA
+    return cwd
 
 
-def _looks_like_root(path: Path) -> bool:
-    return (path / "configs").is_dir() and (path / "assets").is_dir()
+def _is_strict_root(path: Path) -> bool:
+    return (path / "configs" / "env.yaml").is_file() and (
+        path / "assets" / "mjcf" / "world.xml"
+    ).is_file()
 
 
 def _find_root_upwards(start: Path) -> Path | None:
     current = start.resolve()
     for candidate in (current, *current.parents):
-        if _looks_like_root(candidate):
+        if _is_strict_root(candidate):
             return candidate
     return None
 

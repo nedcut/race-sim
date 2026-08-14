@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
+from racesim.paths import resolve_resource
 
 
 def main() -> None:
     import mujoco
 
-    model_path = Path(__file__).resolve().parents[3] / "assets" / "mjcf" / "world.xml"
+    model_path = resolve_resource("assets/mjcf/world.xml")
     model = mujoco.MjModel.from_xml_path(str(model_path))
     data = mujoco.MjData(model)
 
