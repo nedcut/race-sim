@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import subprocess
+import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -147,7 +150,7 @@ def resolve_profile(args: argparse.Namespace) -> SuiteProfile:
     )
 
 
-def main() -> None:
+def main() -> int:
     args = parse_args()
     profile = resolve_profile(args)
     result = run_eval_suite(
@@ -162,6 +165,9 @@ def main() -> None:
         args.json_output.parent.mkdir(parents=True, exist_ok=True)
         args.json_output.write_text(json.dumps(result, indent=2), encoding="utf-8")
     print(f"Wrote {args.output}")
+    if quality_gates_failed(result):
+        raise SystemExit(1)
+    return 0
 
 
 def run_eval_suite(
@@ -256,26 +262,40 @@ def run_eval_suite(
     }
 
 
+def quality_gates_failed(result: dict[str, Any]) -> bool:
+    return any(not gate["passed"] for gate in result.get("quality_gates", []))
+
+
 def run_quality_gates(catalog_path: Path, run_pytest: bool = True) -> list[GateResult]:
     gates: list[GateResult] = []
+    python = sys.executable
     if run_pytest:
-        gates.append(run_gate("pytest", "python -m pytest"))
+        gates.append(run_gate("pytest", [python, "-m", "pytest"]))
     gates.extend(
         [
-            run_gate("ruff", "python -m ruff check ."),
+            run_gate("ruff", [python, "-m", "ruff", "check", "."]),
             run_gate(
                 "track validation",
-                f"python -m racesim.scripts.validate_tracks --catalog {catalog_path}",
+                [
+                    python,
+                    "-m",
+                    "racesim.scripts.validate_tracks",
+                    "--catalog",
+                    str(catalog_path),
+                ],
             ),
         ]
     )
     return gates
 
 
-def run_gate(name: str, command: str) -> GateResult:
+def run_gate(name: str, argv: Sequence[str]) -> GateResult:
+    if isinstance(argv, str | bytes):
+        raise TypeError("run_gate requires an argv sequence, not a shell command string")
+    command = list(argv)
     completed = subprocess.run(
         command,
-        shell=True,
+        shell=False,
         check=False,
         text=True,
         stdout=subprocess.PIPE,
@@ -283,7 +303,7 @@ def run_gate(name: str, command: str) -> GateResult:
     )
     return GateResult(
         name=name,
-        command=command,
+        command=shlex.join(command),
         passed=completed.returncode == 0,
         output_tail="\n".join(completed.stdout.strip().splitlines()[-8:]),
     )

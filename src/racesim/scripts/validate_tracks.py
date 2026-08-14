@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 
 from racesim.env.track import ClosedTrack, TrackGeometryIssue
+from racesim.paths import default_track_catalog, resolve_resource
 
 
 def parse_args() -> argparse.Namespace:
@@ -13,7 +14,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--catalog",
         type=Path,
-        default=Path("configs/track_catalog.yaml"),
+        default=None,
         help="Track catalog to validate when --track is not provided.",
     )
     parser.add_argument(
@@ -28,7 +29,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    paths = args.track or catalog_track_paths(args.catalog)
+    catalog_path = resolve_resource(args.catalog) if args.catalog else default_track_catalog()
+    paths = args.track or catalog_track_paths(catalog_path)
     results = validate_track_paths(paths)
     for path, issues in results:
         if issues:
@@ -43,8 +45,9 @@ def main() -> None:
 
 
 def catalog_track_paths(catalog_path: Path) -> list[Path]:
+    catalog_path = resolve_resource(catalog_path)
     catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["tracks"]
-    return [Path(entry["track"]) for entry in catalog.values()]
+    return [resolve_resource(entry["track"]) for entry in catalog.values()]
 
 
 def validate_track_paths(
@@ -52,7 +55,7 @@ def validate_track_paths(
 ) -> list[tuple[Path, list[TrackGeometryIssue]]]:
     results = []
     for path in paths:
-        track = ClosedTrack.from_config(path)
+        track = ClosedTrack.from_config(resolve_resource(path))
         results.append((path, track.validate_geometry()))
     return results
 
