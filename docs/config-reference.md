@@ -1,10 +1,11 @@
 # Environment Config Reference
 
-Env YAML files (under `configs/env*.yaml`) fully describe a race episode: track, MuJoCo model, vehicle, reward, termination, and optional reset randomization. Paths in the file are relative to the **repository root** when the config lives under `configs/`.
+Env YAML files (under `configs/env*.yaml`) fully describe a race episode: track, MuJoCo model, vehicle, reward, termination, and optional reset randomization. Paths in the file are relative to the **repository root** when the config lives under `configs/`. Unknown keys are rejected (`ValueError`); a typo such as `lap_complet` will not silently leave `lap_complete` at 0. Non-finite numbers and out-of-range weights are also rejected. Optional `schema_version` defaults to `1`.
 
 ## Top-level structure
 
 ```yaml
+schema_version: 1                         # optional; defaults to current schema
 track: configs/tracks/oval.yaml          # geometry YAML (required)
 simulation: { ... }                      # timing and episode limits
 model:
@@ -56,8 +57,11 @@ Example baseline: `configs/env.yaml`.
 |-----|---------|---------|
 | `lookahead_distances` | `(6, 12, 24, 40)` | Arc distances (m) for heading/curvature features |
 | `curvature_scale` | `20.0` | Multiplier on signed curvature features |
+| `include_prev_action` | `false` | Append smoothed actuator command (3 floats) |
+| `include_grip_scale` | `false` | Append episode grip scale |
+| `include_tire_usage` | `false` | Append front/rear tire usage |
 
-Observation shape is `11 + 2 * len(lookahead_distances)`. See [observation-and-action.md](observation-and-action.md).
+Observation shape is `11 + 2 * len(lookahead_distances)` plus enabled optional tails. See [observation-and-action.md](observation-and-action.md).
 
 ## `reward`
 
@@ -78,6 +82,9 @@ All terms are **weights** unless noted. Per-step reward is the sum of:
 | `target_speed_curvature_gain` | map curvature → lower target speed |
 | `no_progress` | penalty when stuck-timeout triggers |
 | `off_track` | penalty on off-track termination |
+| `lap_complete` | sparse bonus when a lap completes (default `0`) |
+| `tire_usage` | penalty × mean axle tire usage (default `0`) |
+| `action_rate` | penalty × ‖Δ smoothed action‖ this step (default `0`) |
 
 ## `termination`
 

@@ -36,6 +36,19 @@ class TrackCurriculumEnv(gym.Env[np.ndarray, np.ndarray]):
         self.current_index = 0
         self.current_env = self.envs[self.current_index]
 
+        obs_shapes = {env.observation_space.shape for env in self.envs}
+        if len(obs_shapes) != 1:
+            raise ValueError(
+                "TrackCurriculumEnv requires matching observation shapes across configs; "
+                f"got {sorted(obs_shapes)}"
+            )
+        action_shapes = {env.action_space.shape for env in self.envs}
+        if len(action_shapes) != 1:
+            raise ValueError(
+                "TrackCurriculumEnv requires matching action shapes across configs; "
+                f"got {sorted(action_shapes)}"
+            )
+
         if lap_target is not None:
             for env in self.envs:
                 env.lap_target = lap_target
@@ -73,6 +86,11 @@ class TrackCurriculumEnv(gym.Env[np.ndarray, np.ndarray]):
 
     def set_probabilities(self, probabilities: list[float]) -> None:
         self.probabilities = normalize_probabilities(probabilities, len(self.envs))
+
+    def close(self) -> None:
+        for env in self.envs:
+            env.close()
+        super().close()
 
     def _annotate_info(self, info: dict[str, Any]) -> dict[str, Any]:
         annotated = dict(info)

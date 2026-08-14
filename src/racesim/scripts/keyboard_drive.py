@@ -31,7 +31,8 @@ def parse_args() -> argparse.Namespace:
         "--policy-model",
         type=Path,
         default=None,
-        help="Stable-Baselines3 PPO model zip toggled by H instead of a built-in controller.",
+        help="Legacy SB3 zip without VecNormalize. Agent bundles are not loaded here; "
+        "use `racesim evaluate-policy -- --bundle PATH` instead.",
     )
     parser.add_argument(
         "--deterministic",
@@ -155,6 +156,28 @@ def main() -> None:
 def make_autopilot(env: RacingEnv, args: argparse.Namespace) -> tuple[object, str]:
     if args.policy_model is None:
         return make_controller(args.autopilot, env.track), args.autopilot
+
+    from racesim.training.agent_bundle import (
+        is_agent_bundle,
+        nearby_train_config,
+        normalize_enabled,
+        sibling_vecnormalize,
+    )
+
+    policy_path = Path(args.policy_model)
+    if is_agent_bundle(policy_path):
+        raise SystemExit(
+            "keyboard drive does not load agent bundles yet. "
+            "Use: racesim evaluate-policy -- --bundle PATH --deterministic"
+        )
+    if sibling_vecnormalize(policy_path) is not None or normalize_enabled(
+        nearby_train_config(policy_path) or {}
+    ):
+        raise SystemExit(
+            "This checkpoint requires VecNormalize stats. keyboard drive cannot load "
+            "them without silently evaluating on raw observations. "
+            "Use: racesim evaluate-policy -- --bundle PATH --deterministic"
+        )
 
     from stable_baselines3 import PPO
 

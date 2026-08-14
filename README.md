@@ -96,12 +96,31 @@ racesim evaluate-policy -- --model artifacts/ppo_oval_quick.zip --episodes 1 --d
 
 ## Features
 
-- **Track layer** — progress, lateral/heading error, off-track, catalog validation  
-- **Vehicle presets** — touring / kart / formula with chassis mass + aero parameters  
-- **Dynamics telemetry** — slip angles, tire usage, load transfer, understeer score  
-- **Eval tooling** — rollouts, plots, vehicle sweeps, multi-seed `configs/eval.yaml`  
-- **Training** — curriculum multi-track env, live eval dashboard, portable `device: auto`  
-- **Quality gates** — GitHub Actions CI, `--quick` suite, open-loop physics pad  
+- **Track layer** — progress, lateral/heading error, off-track, catalog validation
+- **Vehicle presets** — touring / kart / formula with chassis mass + aero parameters
+- **Dynamics telemetry** — slip angles, tire usage, load transfer, understeer score
+- **Eval tooling** — rollouts, plots, vehicle sweeps, multi-seed `configs/eval.yaml`
+- **Training** — curriculum multi-track env, VecNormalize, LR schedules, BC warm-start, live eval
+- **Quality gates** — GitHub Actions CI, `--quick` suite, open-loop physics pad
+
+### Experimental training path
+
+There is no completed high-quality trained model yet. The quality YAML stack is an experimental PPO path (richer observations, VecNormalize, optional BC warm-start):
+
+```bash
+racesim train -- --config configs/train_ppo_quality.yaml
+
+# optional: expert + BC warm-start first (see docs/training.md)
+racesim collect-expert -- --config configs/env_rl_quality.yaml --episodes 20 --output results/expert/data.npz
+```
+
+Evaluate a trained run from its **agent bundle** (model + VecNormalize stats), not a bare zip:
+
+```bash
+racesim evaluate-policy -- --bundle results/ppo_quality/agent_bundle --deterministic --seed-base 20000
+```
+
+See [docs/training.md](docs/training.md).
 
 ## Project layout
 
@@ -122,6 +141,7 @@ artifacts/       Optional demo checkpoints
 | [getting-started.md](docs/getting-started.md) | Install, platforms, first commands |
 | [observation-and-action.md](docs/observation-and-action.md) | Observation vector, actions, `info` |
 | [config-reference.md](docs/config-reference.md) | Env YAML fields |
+| [training.md](docs/training.md) | PPO, VecNormalize, BC warm-start |
 | [tracks.md](docs/tracks.md) | Track authoring |
 | [simulation.md](docs/simulation.md) | Physics model + trust boundary |
 | [dynamics-roadmap.md](docs/dynamics-roadmap.md) | Future dynamics work |

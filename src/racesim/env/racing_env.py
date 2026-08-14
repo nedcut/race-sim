@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import math
 from collections import deque
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,26 @@ from gymnasium import spaces
 from racesim.env.track import ClosedTrack
 from racesim.paths import default_env_config, project_root, resolve_resource
 from racesim.utils.geometry import wrap_angle
+
+CURRENT_ENV_SCHEMA_VERSION = 1
+_KNOWN_ENV_TOP_LEVEL_KEYS = frozenset(
+    {
+        "schema_version",
+        "track",
+        "simulation",
+        "model",
+        "vehicle",
+        "control",
+        "tire_model",
+        "chassis",
+        "observation",
+        "termination",
+        "reset_randomization",
+        "reward",
+        "render",
+    }
+)
+_ALLOWED_DRIVETRAINS = frozenset({"rwd", "fwd", "awd"})
 
 
 @dataclass(frozen=True)
@@ -99,6 +120,9 @@ class RewardConfig:
     target_speed_curvature_gain: float = 5.0
     no_progress: float = 0.0
     off_track: float = 25.0
+    lap_complete: float = 0.0
+    tire_usage: float = 0.0
+    action_rate: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -114,6 +138,21 @@ class TerminationConfig:
 class ObservationConfig:
     lookahead_distances: tuple[float, ...] = (6.0, 12.0, 24.0, 40.0)
     curvature_scale: float = 20.0
+    include_prev_action: bool = False
+    include_grip_scale: bool = False
+    include_tire_usage: bool = False
+
+
+def observation_feature_count(config: ObservationConfig) -> int:
+    """Observation length for a given observation config (base + optional tails)."""
+    size = 11 + 2 * len(config.lookahead_distances)
+    if config.include_prev_action:
+        size += 3
+    if config.include_grip_scale:
+        size += 1
+    if config.include_tire_usage:
+        size += 2
+    return size
 
 
 @dataclass(frozen=True)
@@ -147,6 +186,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         resolved = default_env_config() if config_path is None else resolve_resource(config_path)
         self.config_path = resolved
         self.config = self._load_config(self.config_path)
+        self.schema_version = _validate_env_document(self.config)
         if self.config_path.parent.name == "configs":
             root = self.config_path.parent.parent
         else:
@@ -185,12 +225,10 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.tire_model = self._load_tire_model_config(root)
         self.chassis = self._load_chassis_config(root)
         self._apply_chassis_overrides()
-        self.reward_config = RewardConfig(**self.config.get("reward", {}))
-        self.termination_config = TerminationConfig(**self.config.get("termination", {}))
-        self.observation_config = ObservationConfig(**self.config.get("observation", {}))
-        self.reset_randomization = ResetRandomizationConfig(
-            **self.config.get("reset_randomization", {})
-        )
+        self.reward_config = self._load_reward_config()
+        self.termination_config = self._load_termination_config()
+        self.observation_config = self._load_observation_config()
+        self.reset_randomization = self._load_reset_randomization_config()
         self.off_track_margin = self.termination_config.off_track_margin
 
         self.action_space = spaces.Box(
@@ -198,7 +236,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             high=np.array([1.0, 1.0, 1.0], dtype=np.float32),
             dtype=np.float32,
         )
-        observation_size = 11 + 2 * len(self.observation_config.lookahead_distances)
+        observation_size = observation_feature_count(self.observation_config)
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -210,6 +248,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.previous_progress = 0.0
         self.cumulative_forward_progress = 0.0
         self.smoothed_action = np.zeros(3, dtype=float)
+        self.previous_action = np.zeros(3, dtype=float)
         self.grip_scale = 1.0
         self.last_tire_usage = {"front": 0.0, "rear": 0.0}
         self.last_normal_loads = {"front": 0.0, "rear": 0.0}
@@ -261,49 +300,51 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         return (root / candidate).resolve()
 
     def _load_control_config(self, root: Path) -> ControlConfig:
-        control_config = {}
+        control_config: dict[str, Any] = {}
         vehicle_path = self.config.get("vehicle")
         if vehicle_path is not None:
             vehicle_config = self._load_config(self._resolve_path(vehicle_path, root))
-            control_config.update(vehicle_config.get("control", {}))
-            control_config.update(vehicle_config.get("tire_model", {}))
-        control_config.update(self.config.get("tire_model", {}))
-        control_config.update(self.config.get("control", {}))
-        control_fields = {field.name for field in fields(ControlConfig)}
-        return ControlConfig(
-            **{key: value for key, value in control_config.items() if key in control_fields}
-        )
+            vehicle_control = dict(vehicle_config.get("control", {}) or {})
+            control_config.update(
+                dataclass_from_mapping(ControlConfig, vehicle_control, context="vehicle.control")
+            )
+        env_control = dict(self.config.get("control", {}) or {})
+        control_config.update(dataclass_from_mapping(ControlConfig, env_control, context="control"))
+        config = ControlConfig(**control_config)
+        _validate_control_config(config)
+        return config
 
     def _load_tire_model_config(self, root: Path) -> TireModelConfig:
-        tire_model_config = {}
+        tire_model_config: dict[str, Any] = {}
         vehicle_path = self.config.get("vehicle")
         if vehicle_path is not None:
             vehicle_config = self._load_config(self._resolve_path(vehicle_path, root))
-            tire_model_config.update(vehicle_config.get("tire_model", {}))
-        tire_model_config.update(self.config.get("tire_model", {}))
-        tire_model_fields = {field.name for field in fields(TireModelConfig)}
+            vehicle_tires = dict(vehicle_config.get("tire_model", {}) or {})
+            tire_model_config.update(
+                dataclass_from_mapping(TireModelConfig, vehicle_tires, context="vehicle.tire_model")
+            )
+        env_tires = dict(self.config.get("tire_model", {}) or {})
         tire_model_config.update(
-            {
-                key: value
-                for key, value in self.config.get("control", {}).items()
-                if key in tire_model_fields
-            }
+            dataclass_from_mapping(TireModelConfig, env_tires, context="tire_model")
         )
-        return TireModelConfig(
-            **{key: value for key, value in tire_model_config.items() if key in tire_model_fields}
-        )
+        config = TireModelConfig(**tire_model_config)
+        _validate_tire_model_config(config)
+        return config
 
     def _load_chassis_config(self, root: Path) -> ChassisConfig:
         chassis_config: dict[str, Any] = {}
         vehicle_path = self.config.get("vehicle")
         if vehicle_path is not None:
             vehicle_config = self._load_config(self._resolve_path(vehicle_path, root))
-            chassis_config.update(vehicle_config.get("chassis", {}))
-        chassis_config.update(self.config.get("chassis", {}))
-        chassis_fields = {field.name for field in fields(ChassisConfig)}
-        return ChassisConfig(
-            **{key: value for key, value in chassis_config.items() if key in chassis_fields}
-        )
+            vehicle_chassis = dict(vehicle_config.get("chassis", {}) or {})
+            chassis_config.update(
+                dataclass_from_mapping(ChassisConfig, vehicle_chassis, context="vehicle.chassis")
+            )
+        env_chassis = dict(self.config.get("chassis", {}) or {})
+        chassis_config.update(dataclass_from_mapping(ChassisConfig, env_chassis, context="chassis"))
+        config = ChassisConfig(**chassis_config)
+        _validate_chassis_config(config)
+        return config
 
     def _apply_chassis_overrides(self) -> None:
         if self.chassis.mass_kg is not None:
@@ -326,6 +367,43 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             )
         ):
             mujoco.mj_setConst(self.model, self.data)
+
+    def _load_reward_config(self) -> RewardConfig:
+        config = RewardConfig(
+            **dataclass_from_mapping(RewardConfig, self.config.get("reward", {}), context="reward")
+        )
+        _validate_reward_config(config)
+        return config
+
+    def _load_termination_config(self) -> TerminationConfig:
+        config = TerminationConfig(
+            **dataclass_from_mapping(
+                TerminationConfig, self.config.get("termination", {}), context="termination"
+            )
+        )
+        _validate_termination_config(config)
+        return config
+
+    def _load_observation_config(self) -> ObservationConfig:
+        raw = dict(self.config.get("observation", {}) or {})
+        if "lookahead_distances" in raw:
+            raw["lookahead_distances"] = tuple(float(v) for v in raw["lookahead_distances"])
+        config = ObservationConfig(
+            **dataclass_from_mapping(ObservationConfig, raw, context="observation")
+        )
+        _validate_observation_config(config)
+        return config
+
+    def _load_reset_randomization_config(self) -> ResetRandomizationConfig:
+        config = ResetRandomizationConfig(
+            **dataclass_from_mapping(
+                ResetRandomizationConfig,
+                self.config.get("reset_randomization", {}),
+                context="reset_randomization",
+            )
+        )
+        _validate_reset_randomization_config(config)
+        return config
 
     def reset(
         self,
@@ -361,6 +439,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         self.previous_progress = projection.progress
         self.cumulative_forward_progress = 0.0
         self.smoothed_action[:] = 0.0
+        self.previous_action[:] = 0.0
         self.last_tire_usage = {"front": 0.0, "rear": 0.0}
         self.last_normal_loads = {"front": 0.0, "rear": 0.0}
         self.last_tire_telemetry = TireTelemetry()
@@ -437,6 +516,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
 
         previous_progress = self.previous_progress
         previous_position = self._pose()[:2]
+        previous_smoothed = self.smoothed_action.copy()
         for _ in range(self.frame_skip):
             self._update_smoothed_action(action)
             self._apply_action()
@@ -462,6 +542,10 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         target_speed = self._target_speed(projection.progress)
         self._cached_target_speed = (projection.progress, target_speed)
         speed_excess = max(speed - target_speed, 0.0)
+        action_delta = float(np.linalg.norm(self.smoothed_action - previous_smoothed))
+        mean_tire_usage = 0.5 * (
+            float(self.last_tire_usage["front"]) + float(self.last_tire_usage["rear"])
+        )
         reward_terms = {
             "progress": self.reward_config.progress * progress_delta,
             "time": -self.reward_config.time,
@@ -473,8 +557,12 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             "speed_excess": -self.reward_config.speed_excess * speed_excess**2,
             "no_progress": -self.reward_config.no_progress if no_progress_timeout else 0.0,
             "off_track": -self.reward_config.off_track if off_track else 0.0,
+            "lap_complete": self.reward_config.lap_complete if lap_complete else 0.0,
+            "tire_usage": -self.reward_config.tire_usage * mean_tire_usage,
+            "action_rate": -self.reward_config.action_rate * action_delta,
         }
         reward = float(sum(reward_terms.values()))
+        self.previous_action = np.asarray(action, dtype=float).copy()
 
         terminated = off_track or lap_complete
         truncated = self.step_count >= self.max_episode_steps or no_progress_timeout
@@ -744,6 +832,15 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             self._lookup_target_speed(projection.progress) / self.reward_config.target_speed_max
         )
         features.extend(self._lookahead_features(projection.progress, yaw))
+        if self.observation_config.include_prev_action:
+            # Historical flag name: the tail is the rate-limited actuator command
+            # that actually affected physics, not the raw requested action.
+            features.extend(float(value) for value in self.smoothed_action)
+        if self.observation_config.include_grip_scale:
+            features.append(float(self.grip_scale))
+        if self.observation_config.include_tire_usage:
+            features.append(float(self.last_tire_usage["front"]))
+            features.append(float(self.last_tire_usage["rear"]))
         return np.asarray(features, dtype=np.float32)
 
     def _boundary_margin_features(self, lateral_error: float) -> list[float]:
@@ -954,3 +1051,191 @@ def normalize_2d(vector: np.ndarray) -> np.ndarray:
 
 def cross_z(a: np.ndarray, b: np.ndarray) -> float:
     return float(a[0] * b[1] - a[1] * b[0])
+
+
+def dataclass_from_mapping(
+    cls: type,
+    payload: dict[str, Any] | None,
+    *,
+    context: str,
+) -> dict[str, Any]:
+    """Fail-closed mapping → dataclass kwargs: unknown keys and non-finite numbers error."""
+    if not is_dataclass(cls):
+        raise TypeError(f"{context}: expected a dataclass type")
+    data = dict(payload or {})
+    known = {field.name for field in fields(cls)}
+    unknown = sorted(key for key in data if key not in known)
+    if unknown:
+        raise ValueError(
+            f"Unknown {context} key(s): {', '.join(unknown)}. "
+            f"Known keys: {', '.join(sorted(known))}"
+        )
+    for key, value in data.items():
+        _reject_nonfinite(f"{context}.{key}", value)
+    return data
+
+
+def _validate_env_document(config: dict[str, Any] | None) -> int:
+    if not isinstance(config, dict):
+        raise ValueError("Env YAML must be a mapping")
+    unknown = sorted(key for key in config if key not in _KNOWN_ENV_TOP_LEVEL_KEYS)
+    if unknown:
+        raise ValueError(
+            f"Unknown env YAML key(s): {', '.join(unknown)}. "
+            f"Known keys: {', '.join(sorted(_KNOWN_ENV_TOP_LEVEL_KEYS))}"
+        )
+    raw_version = config.get("schema_version", CURRENT_ENV_SCHEMA_VERSION)
+    _reject_nonfinite("schema_version", raw_version)
+    schema_version = int(raw_version)
+    if schema_version < 1:
+        raise ValueError(f"schema_version must be >= 1, got {schema_version}")
+    if schema_version > CURRENT_ENV_SCHEMA_VERSION:
+        raise ValueError(
+            f"Unsupported env schema_version {schema_version}; "
+            f"this racesim supports up to {CURRENT_ENV_SCHEMA_VERSION}"
+        )
+    return schema_version
+
+
+def _reject_nonfinite(name: str, value: Any) -> None:
+    if value is None or isinstance(value, bool) or isinstance(value, str):
+        return
+    if isinstance(value, (int, float)):
+        if not math.isfinite(float(value)):
+            raise ValueError(f"{name} must be a finite number, got {value!r}")
+        return
+    if isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            _reject_nonfinite(f"{name}[{index}]", item)
+
+
+def _require_non_negative(name: str, value: float) -> None:
+    if value < 0.0:
+        raise ValueError(f"{name} must be >= 0, got {value}")
+
+
+def _require_positive(name: str, value: float) -> None:
+    if value <= 0.0:
+        raise ValueError(f"{name} must be > 0, got {value}")
+
+
+def _validate_reward_config(config: RewardConfig) -> None:
+    _require_non_negative("reward.progress", config.progress)
+    _require_non_negative("reward.time", config.time)
+    _require_non_negative("reward.lateral_error", config.lateral_error)
+    _require_non_negative("reward.heading_error", config.heading_error)
+    _require_non_negative("reward.boundary_margin", config.boundary_margin)
+    _require_non_negative("reward.boundary_margin_start", config.boundary_margin_start)
+    _require_non_negative("reward.progress_gate", config.progress_gate)
+    _require_non_negative("reward.speed_excess", config.speed_excess)
+    _require_non_negative("reward.target_speed_min", config.target_speed_min)
+    _require_positive("reward.target_speed_max", config.target_speed_max)
+    if config.target_speed_min > config.target_speed_max:
+        raise ValueError("reward.target_speed_min must be <= reward.target_speed_max")
+    _require_non_negative("reward.target_speed_curvature_gain", config.target_speed_curvature_gain)
+    _require_non_negative("reward.no_progress", config.no_progress)
+    _require_non_negative("reward.off_track", config.off_track)
+    _require_non_negative("reward.lap_complete", config.lap_complete)
+    _require_non_negative("reward.tire_usage", config.tire_usage)
+    _require_non_negative("reward.action_rate", config.action_rate)
+    if config.progress_gate > 0.0:
+        _require_positive("reward.progress_gate_spacing", config.progress_gate_spacing)
+    elif config.progress_gate_spacing < 0.0:
+        raise ValueError("reward.progress_gate_spacing must be >= 0 when gates are unused")
+
+
+def _validate_termination_config(config: TerminationConfig) -> None:
+    _require_non_negative("termination.off_track_margin", config.off_track_margin)
+    if config.no_progress_window_steps < 0:
+        raise ValueError("termination.no_progress_window_steps must be >= 0")
+    _require_non_negative("termination.no_progress_min_delta", config.no_progress_min_delta)
+    _require_non_negative("termination.max_progress_delta_factor", config.max_progress_delta_factor)
+    _require_non_negative("termination.max_progress_delta_slack", config.max_progress_delta_slack)
+
+
+def _validate_observation_config(config: ObservationConfig) -> None:
+    if not config.lookahead_distances:
+        raise ValueError("observation.lookahead_distances must be non-empty")
+    for index, distance in enumerate(config.lookahead_distances):
+        _require_positive(f"observation.lookahead_distances[{index}]", float(distance))
+    _require_positive("observation.curvature_scale", config.curvature_scale)
+
+
+def _validate_reset_randomization_config(config: ResetRandomizationConfig) -> None:
+    _require_non_negative("reset_randomization.lateral_offset", config.lateral_offset)
+    _require_non_negative("reset_randomization.heading_error", config.heading_error)
+    if config.speed_min is not None:
+        _require_non_negative("reset_randomization.speed_min", config.speed_min)
+    if config.speed_max is not None:
+        _require_non_negative("reset_randomization.speed_max", config.speed_max)
+    if (
+        config.speed_min is not None
+        and config.speed_max is not None
+        and config.speed_min > config.speed_max
+    ):
+        raise ValueError("reset_randomization.speed_min must be <= speed_max")
+    if config.grip_min is not None:
+        _require_positive("reset_randomization.grip_min", config.grip_min)
+    if config.grip_max is not None:
+        _require_positive("reset_randomization.grip_max", config.grip_max)
+    if (
+        config.grip_min is not None
+        and config.grip_max is not None
+        and config.grip_min > config.grip_max
+    ):
+        raise ValueError("reset_randomization.grip_min must be <= grip_max")
+
+
+def _validate_control_config(config: ControlConfig) -> None:
+    if config.drivetrain.lower() not in _ALLOWED_DRIVETRAINS:
+        raise ValueError(
+            f"control.drivetrain must be one of {sorted(_ALLOWED_DRIVETRAINS)}, "
+            f"got {config.drivetrain!r}"
+        )
+    _require_positive("control.max_steer_angle", config.max_steer_angle)
+    _require_non_negative("control.steer_rate", config.steer_rate)
+    _require_non_negative("control.throttle_rate", config.throttle_rate)
+    _require_non_negative("control.brake_rate", config.brake_rate)
+    _require_non_negative("control.max_drive_force", config.max_drive_force)
+    _require_non_negative("control.max_brake_force", config.max_brake_force)
+    _require_non_negative("control.front_cornering_stiffness", config.front_cornering_stiffness)
+    _require_non_negative("control.rear_cornering_stiffness", config.rear_cornering_stiffness)
+    _require_non_negative("control.max_lateral_force", config.max_lateral_force)
+    _require_non_negative("control.yaw_damping", config.yaw_damping)
+    _require_non_negative("control.linear_drag", config.linear_drag)
+    _require_non_negative("control.rolling_resistance", config.rolling_resistance)
+    _require_positive("control.wheelbase", config.wheelbase)
+    _require_positive("control.center_of_mass_to_front", config.center_of_mass_to_front)
+    _require_positive("control.center_of_mass_to_rear", config.center_of_mass_to_rear)
+
+
+def _validate_tire_model_config(config: TireModelConfig) -> None:
+    _require_positive("tire_model.center_of_mass_height", config.center_of_mass_height)
+    if config.tire_friction_coefficient is not None:
+        _require_positive("tire_model.tire_friction_coefficient", config.tire_friction_coefficient)
+    _require_positive("tire_model.combined_slip_exponent", config.combined_slip_exponent)
+    if not 0.0 <= config.brake_front_bias <= 1.0:
+        raise ValueError("tire_model.brake_front_bias must be in [0, 1]")
+    _require_non_negative(
+        "tire_model.aero_downforce_coefficient", config.aero_downforce_coefficient
+    )
+    _require_non_negative("tire_model.aero_drag_coefficient", config.aero_drag_coefficient)
+    if not 0.0 <= config.aero_front_balance <= 1.0:
+        raise ValueError("tire_model.aero_front_balance must be in [0, 1]")
+    _require_positive("tire_model.peak_slip_angle", config.peak_slip_angle)
+    _require_positive("tire_model.lateral_saturation_softness", config.lateral_saturation_softness)
+    _require_positive(
+        "tire_model.longitudinal_saturation_softness", config.longitudinal_saturation_softness
+    )
+    _require_positive("tire_model.low_speed_slip_floor", config.low_speed_slip_floor)
+
+
+def _validate_chassis_config(config: ChassisConfig) -> None:
+    if config.mass_kg is not None:
+        _require_positive("chassis.mass_kg", config.mass_kg)
+    if config.ixx is not None:
+        _require_positive("chassis.ixx", config.ixx)
+    if config.iyy is not None:
+        _require_positive("chassis.iyy", config.iyy)
+    if config.izz is not None:
+        _require_positive("chassis.izz", config.izz)

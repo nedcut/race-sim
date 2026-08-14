@@ -1,9 +1,12 @@
 # Observation and Action Spaces
 
-Default observation dimension is **19** when `observation.lookahead_distances` has four entries (the package default). Shape is always:
+Default observation dimension is **19** when `observation.lookahead_distances` has four entries and no optional features are enabled. Shape is:
 
 ```text
 11 + 2 * len(lookahead_distances)
+  + 3 if include_prev_action
+  + 1 if include_grip_scale
+  + 2 if include_tire_usage
 ```
 
 Action space is always **3-D** continuous.
@@ -28,7 +31,7 @@ smoothed += clip(action − smoothed, ±rate * dt)
 
 Rates come from vehicle/control config (`steer_rate`, `throttle_rate`, `brake_rate`), in units of **command units per second**. `dt` is the MuJoCo timestep (`model.opt.timestep`). Over one env step, smoothing runs `frame_skip` times.
 
-The commanded steer angle is `smoothed_steering * max_steer_angle` (radians). Smoothed commands are exposed each step as `info["smoothed_action"]` (shape `(3,)`).
+The commanded steer angle is `smoothed_steering * max_steer_angle` (radians). Smoothed commands are exposed each step as `info["smoothed_action"]` (shape `(3,)`). When `observation.include_prev_action` is true, that same smoothed command is appended to the observation vector (not the raw requested action).
 
 ## Observation layout (default 19-D)
 
@@ -61,6 +64,18 @@ wrap(heading_future − heading_current) / distance * curvature_scale
 ```
 
 with default `curvature_scale: 20.0`. Adding or removing lookahead distances changes the total length (two features per distance).
+
+## Optional observation tails
+
+These are **off by default** so 19-D policies remain valid. Enable in env YAML under `observation:`:
+
+| Order (when enabled) | Features | Config flag |
+|----------------------|----------|-------------|
+| after lookaheads | smoothed actuator `(steering, throttle, brake)` | `include_prev_action` |
+| next | grip scale | `include_grip_scale` |
+| next | front / rear tire usage in `[0, 1]` | `include_tire_usage` |
+
+`configs/env_rl_quality.yaml` enables all three (**25-D**). The `include_prev_action` tail is the rate-limited command that affected physics (`smoothed_action`; zeros on reset), not the raw requested action. Tire usage is the latest axle combined-slip usage from the dynamics proxy.
 
 ## `info` dictionary keys
 

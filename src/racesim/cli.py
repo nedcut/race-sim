@@ -73,6 +73,18 @@ def _cmd_train(args: argparse.Namespace) -> int:
     return _run(train_main, list(args.argv))
 
 
+def _cmd_collect_expert(args: argparse.Namespace) -> int:
+    from racesim.training.expert_data import main as collect_main
+
+    return _run(collect_main, list(args.argv))
+
+
+def _cmd_bc_pretrain(args: argparse.Namespace) -> int:
+    from racesim.training.bc_pretrain import main as bc_main
+
+    return _run(bc_main, list(args.argv))
+
+
 def _cmd_keyboard(args: argparse.Namespace) -> int:
     from racesim.scripts.keyboard_drive import main as keyboard_main
 
@@ -106,6 +118,8 @@ def build_parser() -> argparse.ArgumentParser:
         ("physics", "Run open-loop physics benchmarks", _cmd_physics),
         ("suite", "Run the quality / baseline suite", _cmd_suite),
         ("train", "Train PPO (requires [rl] extra)", _cmd_train),
+        ("collect-expert", "Collect expert transitions for BC", _cmd_collect_expert),
+        ("bc-pretrain", "Behavioral cloning warm-start for PPO", _cmd_bc_pretrain),
         ("keyboard", "Interactive keyboard drive", _cmd_keyboard),
         ("validate-tracks", "Validate the track catalog", _cmd_validate_tracks),
     ):

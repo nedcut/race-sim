@@ -18,6 +18,13 @@ from racesim.eval.evaluate_policy import evaluate_policy_model
 from racesim.eval.physics_benchmarks import run_physics_benchmarks
 from racesim.eval.smoke_tracks import smoke_tracks
 from racesim.paths import default_track_catalog
+from racesim.training.agent_bundle import (
+    AgentBundleError,
+    is_agent_bundle,
+    load_agent_bundle,
+    resolve_model_checkpoint,
+)
+from racesim.training.seeds import DEFAULT_FINAL_EVAL_SEED_BASE
 
 DEFAULT_POLICY_MODEL = Path("results/ppo_blind_grip_095_105_beefy_1m/best_model.zip")
 
@@ -113,6 +120,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-episodes", type=int, default=None)
     parser.add_argument("--eval-max-steps", type=int, default=None)
     parser.add_argument("--policy-model", type=Path, default=DEFAULT_POLICY_MODEL)
+    parser.add_argument(
+        "--policy-bundle",
+        type=Path,
+        default=None,
+        help="Agent bundle directory (preferred over --policy-model for trained PPO).",
+    )
     parser.add_argument("--policy-episodes", type=int, default=None)
     parser.add_argument("--policy-max-steps", type=int, default=None)
     parser.add_argument("--skip-gates", action="store_true")
@@ -156,6 +169,7 @@ def main() -> int:
     result = run_eval_suite(
         catalog_path=args.catalog or default_track_catalog(),
         policy_model=args.policy_model,
+        policy_bundle=args.policy_bundle,
         profile=profile,
     )
 
@@ -176,6 +190,7 @@ def run_eval_suite(
     eval_episodes: int | None = None,
     eval_max_steps: int | None = None,
     policy_model: Path = DEFAULT_POLICY_MODEL,
+    policy_bundle: Path | None = None,
     policy_episodes: int | None = None,
     policy_max_steps: int | None = None,
     run_gates: bool | None = None,
@@ -239,6 +254,7 @@ def run_eval_suite(
     policy = run_policy_matrix(
         catalog=catalog,
         policy_model=policy_model,
+        policy_bundle=policy_bundle,
         episodes=active.policy_episodes,
         max_steps=active.policy_max_steps,
         enabled=active.run_policy,
@@ -256,7 +272,7 @@ def run_eval_suite(
         "physics_sanity_flags": physics["sanity_flags"],
         "physics_config": physics["config"],
         "physics_threshold_policy": "telemetry_only",
-        "policy_model": str(policy_model),
+        "policy_model": str(policy_bundle or policy_model),
         "policy_matrix": policy,
         "failure_cases": failure_cases(smoke, policy),
     }
@@ -315,18 +331,35 @@ def run_policy_matrix(
     episodes: int,
     max_steps: int,
     enabled: bool,
+    policy_bundle: Path | None = None,
 ) -> dict[str, Any]:
     if not enabled:
         return {"status": "skipped", "reason": "disabled"}
-    if not policy_model.exists():
-        return {"status": "skipped", "reason": f"missing model: {policy_model}"}
 
     try:
         from stable_baselines3 import PPO
     except ImportError as exc:
         return {"status": "skipped", "reason": f"missing stable-baselines3: {exc}"}
 
-    model = PPO.load(policy_model)
+    vec_path: Path | None = None
+    try:
+        if policy_bundle is not None or is_agent_bundle(policy_model):
+            bundle = load_agent_bundle(policy_bundle or policy_model)
+            model = PPO.load(bundle.model_path)
+            vec_path = bundle.vecnormalize_path
+            if bool(bundle.manifest.get("normalize_enabled")) and vec_path is None:
+                return {
+                    "status": "error",
+                    "reason": "bundle was trained with VecNormalize but stats are missing",
+                }
+        else:
+            if not policy_model.exists():
+                return {"status": "skipped", "reason": f"missing model: {policy_model}"}
+            model_path, vec_path = resolve_model_checkpoint(policy_model)
+            model = PPO.load(model_path)
+    except (AgentBundleError, FileNotFoundError) as exc:
+        return {"status": "error", "reason": str(exc)}
+
     rows = []
     for track_name, entry in catalog.items():
         result = evaluate_policy_model(
@@ -337,6 +370,8 @@ def run_policy_matrix(
             lap_target=1.0,
             deterministic=True,
             record_trajectory=False,
+            vecnormalize_path=vec_path,
+            seeds=[DEFAULT_FINAL_EVAL_SEED_BASE + episode for episode in range(episodes)],
         )
         rows.append({"track": track_name, **result["summary"]})
     return {"status": "ok", "episodes": episodes, "rows": rows}
