@@ -70,7 +70,7 @@ Returned from both `reset` and `step` (reward-related fields empty at reset).
 |-----|------|---------|
 | `progress` | float | Absolute centerline arc length (m) |
 | `lap_fraction` | float | Current lap progress / track length |
-| `cumulative_lap_fraction` | float | Forward progress / track length (multi-lap) |
+| `cumulative_lap_fraction` | float | Net signed forward progress / track length (floored at 0) |
 | `progress_delta` | float | Validated centerline progress this step (m) |
 | `raw_progress_delta` | float | Unclipped geometric progress delta (m) |
 | `progress_delta_clipped` | bool | Whether progress delta was capped |
@@ -93,7 +93,7 @@ Returned from both `reset` and `step` (reward-related fields empty at reset).
 | `steering_angle` | float | Actual steer angle (rad) after max_steer scale |
 | `understeer_score` | float | Expected yaw rate − actual yaw rate |
 | `off_track` | bool | Off-track with termination margin |
-| `lap_complete` | bool | Cumulative progress ≥ `lap_target` laps |
+| `lap_complete` | bool | Net signed forward progress ≥ `lap_target` laps |
 | `no_progress_timeout` | bool | Stuck within progress window |
 | `reward_terms` | dict | Per-term reward contributions (empty on reset) |
 

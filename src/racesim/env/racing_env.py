@@ -451,8 +451,7 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
         progress_delta = self._validated_progress_delta(raw_progress_delta, physical_delta)
         progress_delta_clipped = not np.isclose(progress_delta, raw_progress_delta)
         self.previous_progress = projection.progress
-        self.cumulative_forward_progress += max(progress_delta, 0.0)
-        gates_crossed = self._consume_progress_gates()
+        gates_crossed = self._apply_progress_delta(progress_delta)
 
         off_track = self.track.is_off_track(pose[:2], margin=self.off_track_margin)
         lap_complete = self._lap_complete()
@@ -809,8 +808,16 @@ class RacingEnv(gym.Env[np.ndarray, np.ndarray]):
             return spacing * self.track.length
         return spacing
 
-    def _consume_progress_gates(self) -> int:
+    def _apply_progress_delta(self, progress_delta: float) -> int:
+        self.cumulative_forward_progress = max(
+            0.0, self.cumulative_forward_progress + progress_delta
+        )
+        return self._consume_progress_gates(progress_delta)
+
+    def _consume_progress_gates(self, progress_delta: float) -> int:
         if self.reward_config.progress_gate <= 0.0 or not np.isfinite(self.next_progress_gate):
+            return 0
+        if progress_delta <= 0.0:
             return 0
         spacing = self._progress_gate_distance()
         gates_crossed = 0

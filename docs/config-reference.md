@@ -24,11 +24,11 @@ Example baseline: `configs/env.yaml`.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `dt` | (metadata) | Documented intended step size; MuJoCo timestep is still from the XML |
+| `dt` | (XML timestep) | When provided, sets `model.opt.timestep`; otherwise the XML timestep is kept |
 | `frame_skip` | `1` | Physics substeps per env `step` |
 | `max_episode_steps` | `3000` | Truncate after this many env steps |
 | `initial_speed` | `0.0` | Reset speed along track tangent (m/s) |
-| `lap_target` | `1.0` | Terminates when cumulative progress ≥ this many laps |
+| `lap_target` | `1.0` | Terminates when net signed forward progress ≥ this many laps |
 
 ## `vehicle` / `control` / `tire_model`
 
@@ -71,8 +71,8 @@ All terms are **weights** unless noted. Per-step reward is the sum of:
 | `heading_error` | `× |heading_error|` |
 | `boundary_margin` | quadratic shortfall below margin start |
 | `boundary_margin_start` | margin distance (m) before shortfall grows |
-| `progress_gate` | bonus per cumulative distance gate crossed |
-| `progress_gate_spacing` | gate spacing; `≤1` as lap fraction, else meters |
+| `progress_gate` | bonus per ordered forward gate crossed |
+| `progress_gate_spacing` | `(0, 1]` is a lap fraction, `> 1` is meters, `≤ 0` disables gates. A gate fires only when moving forward onto the next gate in order |
 | `speed_excess` | `× max(speed − target, 0)²` |
 | `target_speed_max` / `target_speed_min` | target speed clamp (m/s) |
 | `target_speed_curvature_gain` | map curvature → lower target speed |
