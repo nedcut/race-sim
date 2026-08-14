@@ -1,0 +1,43 @@
+# Short smoke train for CI / pipeline validation (not a competitive policy).
+# Seeds use the same disjoint ranges as train_ppo_quality.yaml.
+seed: 1000
+total_timesteps: 2048
+output_dir: results/ppo_quality_smoke
+checkpoint_freq: 1024
+normalize:
+  enabled: true
+  norm_obs: true
+  norm_reward: false
+env:
+  env_configs:
+    - configs/env_rl_quality.yaml
+  randomize_reset: true
+  lap_target: 1.0
+  max_episode_steps: 200
+  n_envs: 1
+  vec_env: dummy
+ppo:
+  policy: MlpPolicy
+  device: cpu
+  n_steps: 128
+  batch_size: 64
+  n_epochs: 2
+  learning_rate: linear_3e-4
+  gamma: 0.99
+  gae_lambda: 0.95
+  ent_coef: 0.01
+  clip_range: 0.2
+  policy_kwargs:
+    net_arch:
+      pi: [64, 64]
+      vf: [64, 64]
+eval:
+  env_config: configs/env_rl_quality.yaml
+  frequency: 10000
+  seed_base: 10000
+  episodes: 1
+  max_steps: 100
+  deterministic: true
+  save_best: false
+live:
+  enabled: false

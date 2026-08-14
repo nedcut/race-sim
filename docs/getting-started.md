@@ -77,10 +77,18 @@ Quick oval train for a tiny onboarding checkpoint:
 ```bash
 python scripts/train_quick_checkpoint.py
 # equivalent one-liner after editing timesteps if preferred:
-racesim-train-ppo --config configs/train_ppo_oval_quick.yaml
+racesim train -- --config configs/train_ppo_oval_quick.yaml
 ```
 
 This writes `artifacts/ppo_oval_quick.zip` when training succeeds.
+
+For an experimental quality stack (VecNormalize, schedules, richer obs) see
+[docs/training.md](training.md). There is no completed high-quality trained
+baseline yet.
+
+```bash
+racesim train -- --config configs/train_ppo_quality.yaml
+```
 
 ## Gymnasium
 
@@ -100,6 +108,7 @@ Entry point registration is also declared in `pyproject.toml` under
 ## Next steps
 
 - [README.md](../README.md) — First 10 minutes and advanced CLI
+- [docs/training.md](training.md) — PPO, normalize, BC warm-start
 - [docs/simulation.md](simulation.md) — Current vehicle/physics model limits
 - [docs/observation-and-action.md](observation-and-action.md) — Observation / action / info
 - [docs/config-reference.md](config-reference.md) — Env YAML keys

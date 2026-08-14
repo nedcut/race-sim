@@ -1,0 +1,60 @@
+# Experimental quality PPO stack (VecNormalize, schedules, checkpoints).
+# Pair with configs/env_rl_quality.yaml (25-D observations).
+# This is not a completed high-quality baseline; it is an experimental training path.
+#
+# Seed ranges (disjoint):
+#   training:         1000–1999  (this file: seed)
+#   live/validation: 10000–19999 (eval.seed_base)
+#   final evaluation: 20000–29999 (racesim evaluate-policy --seed-base)
+#
+# pretrained: BC zip or bundle — policy weights only, plus VecNormalize stats.
+# resume: full PPO zip/bundle + VecNormalize + timestep counters.
+# Do not set both.
+seed: 1000
+total_timesteps: 500000
+output_dir: results/ppo_quality
+checkpoint_freq: 50000
+save_vecnormalize: true
+vecnormalize_save_freq: 25000
+normalize:
+  enabled: true
+  norm_obs: true
+  norm_reward: true
+  clip_obs: 10.0
+  clip_reward: 10.0
+env:
+  env_configs:
+    - configs/env_rl_quality.yaml
+  randomize_reset: true
+  lap_target: 1.0
+  max_episode_steps: 2000
+  n_envs: 4
+  vec_env: dummy
+ppo:
+  policy: MlpPolicy
+  device: auto
+  n_steps: 1024
+  batch_size: 256
+  n_epochs: 10
+  learning_rate: linear_3e-4
+  gamma: 0.995
+  gae_lambda: 0.95
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  clip_range: 0.2
+  policy_kwargs:
+    net_arch:
+      pi: [256, 256]
+      vf: [256, 256]
+eval:
+  env_config: configs/env_rl_quality.yaml
+  frequency: 25000
+  seed_base: 10000
+  episodes: 5
+  max_steps: 2000
+  deterministic: true
+  save_best: true
+live:
+  enabled: true
+  directory: results/ppo_quality/live
